@@ -1,10 +1,10 @@
 """Minimal strict virtual machine compatible with Python 2.0 and later."""
 
 
-_INTEGER_TYPE = type(1)
-_LARGE_INTEGER_TYPE = type(1 << 32)
-_FLOAT_TYPE = type(1.0)
-_NUMBER_TYPES = (_INTEGER_TYPE, _LARGE_INTEGER_TYPE, _FLOAT_TYPE)
+_INTEGER_TYPE = type(1)  # type: object
+_LARGE_INTEGER_TYPE = type(1 << 32)  # type: object
+_FLOAT_TYPE = type(1.0)  # type: object
+_NUMBER_TYPES = (_INTEGER_TYPE, _LARGE_INTEGER_TYPE, _FLOAT_TYPE)  # type: tuple
 
 
 class VMError(Exception):
@@ -27,7 +27,7 @@ class VMTypeError(VMRuntimeError):
     pass
 
 
-def new_state():
+def new_state():  # type: () -> dict
     """Return a fresh, independent execution state."""
     return {
         "pc": 0,
@@ -37,21 +37,21 @@ def new_state():
     }
 
 
-def is_integer(value):
+def is_integer(value):  # type: (object) -> int
     """Return 1 for Python 2/3 integer values, otherwise 0."""
     if isinstance(value, (_INTEGER_TYPE, _LARGE_INTEGER_TYPE)):
         return 1
     return 0
 
 
-def is_number(value):
+def is_number(value):  # type: (object) -> int
     """Return 1 for supported numeric values, otherwise 0."""
     if isinstance(value, _NUMBER_TYPES):
         return 1
     return 0
 
 
-def boolean_value(value):
+def boolean_value(value):  # type: (object) -> int
     """Normalize a host comparison result to a VM boolean."""
     if value:
         return 1
@@ -67,10 +67,10 @@ class VM:
         "JUMP_IF_FALSE", "HALT"
     )
 
-    def __init__(self):
-        self.last_state = None
+    def __init__(self):  # type: () -> None
+        self.last_state = None  # type: object
 
-    def validate_program(self, program):
+    def validate_program(self, program):  # type: (object) -> object
         """Validate program shape and static instruction operands."""
         if not isinstance(program, (list, tuple)):
             raise VMValidationError("program must be a list or tuple")
@@ -111,7 +111,7 @@ class VM:
 
         return program
 
-    def run(self, program, state=None, max_steps=None):
+    def run(self, program, state=None, max_steps=None):  # type: (object, object, object) -> dict
         """Validate and execute a program, returning its final state."""
         self.validate_program(program)
 
@@ -122,7 +122,7 @@ class VM:
         if state["pc"] > len(program):
             raise VMRuntimeError("state program counter is outside the program")
 
-        steps = 0
+        steps = 0  # type: int
         while state["halt"] == 0:
             if state["pc"] >= len(program):
                 state["halt"] = 1
@@ -137,7 +137,7 @@ class VM:
         self.last_state = state
         return state
 
-    def validate_state(self, state):
+    def validate_state(self, state):  # type: (object) -> None
         """Check the required execution-state shape."""
         if not isinstance(state, dict):
             raise VMRuntimeError("state must be a dictionary")
@@ -160,7 +160,7 @@ class VM:
         if not isinstance(state["env"], dict):
             raise VMRuntimeError("state environment must be a dictionary")
 
-    def step(self, program, state):
+    def step(self, program, state):  # type: (object, dict) -> dict
         """Execute exactly one instruction."""
         pc = state["pc"]
         instruction = program[pc]
@@ -280,32 +280,32 @@ class VM:
         state["pc"] = next_pc
         return state
 
-    def pop_value(self, state):
+    def pop_value(self, state):  # type: (dict) -> object
         """Pop and return the top stack value."""
         if len(state["stack"]) == 0:
             raise VMStackError("stack underflow")
         return state["stack"].pop()
 
-    def peek_value(self, state):
+    def peek_value(self, state):  # type: (dict) -> object
         """Return the top stack value without removing it."""
         if len(state["stack"]) == 0:
             raise VMStackError("stack underflow")
         return state["stack"][len(state["stack"]) - 1]
 
-    def pop_two(self, state):
+    def pop_two(self, state):  # type: (dict) -> tuple
         """Pop two operands and return them in left-to-right order."""
         b = self.pop_value(state)
         a = self.pop_value(state)
         return a, b
 
-    def pop_condition(self, state):
+    def pop_condition(self, state):  # type: (dict) -> int
         """Pop and validate a VM boolean."""
         value = self.pop_value(state)
         if value != 0 and value != 1:
             raise VMTypeError("condition must be 0 or 1")
         return value
 
-    def compare_ordered(self, a, b, operation):
+    def compare_ordered(self, a, b, operation):  # type: (object, object, object) -> None
         """Validate operands used by LT and GT."""
         if is_number(a) and is_number(b):
             return
