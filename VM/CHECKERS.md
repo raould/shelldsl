@@ -62,44 +62,46 @@ The MVP does not attempt to:
 - Depend on third-party hosted services.
 - Replace domain-specific tests for shells, filesystems, processes, encodings, or external tools.
 
-## Pipeline result model
+## Current checker result model
 
-Every stage should produce an explicit result category.
+The implemented checker layer does not produce stage objects or named result
+categories. Each discovered `check_source()` function returns a list:
 
-Recommended categories:
+- `[]` means that checker found no violation.
+- A non-empty list contains one or more diagnostic dictionaries.
 
-- `PASS`: stage completed successfully.
-- `FAIL`: stage completed and found a violation or failed test.
-- `ERROR`: the checker itself could not complete normally.
-- `TIMEOUT`: runtime execution exceeded its limit.
-- `CRASH`: the interpreter or container terminated unexpectedly.
-- `SKIP`: a configured interpreter or optional checker is unavailable.
-- `NOT_RUN`: a later stage was intentionally not started.
-- `EXPECTED_DIFFERENCE`: a documented cross-version difference.
+Each diagnostic contains `rule_id`, `severity`, `message`, `filename`,
+`line`, `column`, and `alternatives`. The current twelve rules all use
+`Severity.ERROR`.
 
-A complete report might look like:
+`checkall.py` combines the lists from all discovered checkers for each file and
+prints every diagnostic. Its process exit status is:
 
-```text
-Source policy: PASS
-Type checks: PASS
-Local tests: PASS
-Python 2.7 runtime: PASS
-Python 3.14 runtime: PASS
-Cross-version comparison: PASS
-```
+- `0`: every existing input file produced no diagnostics.
+- `1`: a file was missing, a file could not be read, or any checker produced a
+    diagnostic.
+- `2`: no input paths were provided.
 
-A failure report might look like:
+For example, a clean invocation produces no diagnostic output and exits `0`:
 
 ```text
-Source policy: PASS
-Type checks: PASS
-Local tests: PASS
-Python 2.7 runtime: FAIL
-Python 3.14 runtime: PASS
-Cross-version comparison: NOT_RUN
+$ python3 VM/scripts/checkall.py VM/test/sdk_output_pass.py
+$ echo $?
+0
 ```
 
-The overall command should return `0` only when all required stages pass. Optional unavailable stages may be reported as `SKIP` according to explicit command-line policy.
+A violating invocation prints diagnostics and exits `1`:
+
+```text
+$ python3 VM/scripts/checkall.py VM/test/print_fail.py
+VM/test/print_fail.py:2:5: [6d0d587] [ERROR] disallowed: 'print'. alternatives: prnt,sys.stdout.write
+$ echo $?
+1
+```
+
+Statuses such as `PASS`, `TIMEOUT`, `CRASH`, `SKIP`, and
+`EXPECTED_DIFFERENCE` belong to the planned runtime and matrix layers. They
+are not currently returned or printed by the implemented checkers.
 
 ## Tool 1: source-policy checker
 
