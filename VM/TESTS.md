@@ -27,9 +27,9 @@ Do not claim that Python 2.0 code runs on every modern operating system merely b
 VM/
     VM.md
     DESIGN.md
-
-VM/tests/
     TESTS.md
+
+VM/test/
     core.py                 # Python 2.0-compatible implementation
     test_core.py            # Python 2.0-compatible behavioral tests
     test_vectors.py         # Version-independent program/result vectors
@@ -43,6 +43,10 @@ VM/scripts/
     test-current.sh         # Run tests with the active Python
     test-matrix.sh          # Run available interpreters
     test-legacy.sh          # Run historical interpreter targets
+
+VM/docker/
+    Dockerfile.py_2_7       # Python 2.7
+    Dockerifle.py_3_14      # Python 3.14
 
 VM/ci/
     ...                      # CI-specific configurations, if supported

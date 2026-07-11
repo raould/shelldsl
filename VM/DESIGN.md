@@ -302,7 +302,6 @@ class VM:
             ):
                 raise VMValidationError(
                     "unknown opcode %s at %s" % (str(opcode), index)
-                )
 
             if opcode in ("JUMP", "JUMP_IF_FALSE"):
                 if not is_integer(operand):
@@ -524,6 +523,7 @@ def run_example():
 
 ## Skeleton behavior notes
 
+
 ### Program completion
 
 If `pc` reaches `len(program)` without an explicit `HALT`, the skeleton sets `halt` to `1` and returns normally. An explicit `HALT` is still recommended because it makes program intent visible.
@@ -678,6 +678,153 @@ The text policy is:
 - Python 3 `str` is semantic text.
 - Python 3 `bytes` is raw bytes.
 - Encoding and decoding must be explicit at external boundaries.
+
+## Development-time static typing
+
+Static typing is primarily intended to help maintain the VM implementation as
+it grows. A typed API for downstream libraries is useful, but it is secondary
+to finding bugs in the core implementation during development.
+
+### Shared-source rule
+
+The shared implementation must remain parseable by Python 2.0. Therefore it
+must not use Python 3 function annotations, variable annotations, `typing`
+imports, or `from __future__ import annotations`.
+
+Use type comments instead:
+
+```python
+def new_state():  # type: () -> dict
+    return {
+        "pc": 0,
+        "halt": 0,
+        "stack": [],
+        "env": {}
+    }
+
+
+def run(self, program, state=None, max_steps=None):
+    # type: (list, object, object) -> dict
+    pass
+```
+
+Python 2.0 treats these comments as comments. Modern static-analysis tools
+can interpret them without requiring newer syntax in the source file.
+
+The same rule applies to [VM/src/core.py](VM/src/core.py) and any other source
+file that must run on Python 2.0.
+
+### Two type-checking targets
+
+Mypy does not need to run inside Python 2.0. It runs in a modern development
+environment and analyzes the Python 2.0-compatible source.
+
+The project should maintain two checks:
+
+1. A pinned legacy checker, using the oldest verified mypy release and mode
+   that can analyze Python 2-style source.
+2. A current mypy release, checking the same shared source using the current
+   Python 3 target semantics.
+
+The legacy checker must be verified experimentally. Do not assume that a
+particular mypy version, including 0.971, still supports Python 2 analysis;
+Python 2 support has been deprecated and removed across mypy releases. If a
+chosen version does support it, its invocation may use a Python 2 mode such
+as:
+
+```text
+mypy --py2 VM/src/core.py
+```
+
+The current checker can analyze the shared source with an explicit modern
+target:
+
+```text
+mypy --python-version 3.14 VM/src/core.py
+```
+
+The exact commands and pinned versions should be recorded in development
+scripts rather than assumed by the runtime package.
+
+### Type comments as the common denominator
+
+The shared implementation should initially use simple built-in types in type
+comments:
+
+```python
+def is_integer(value):  # type: (object) -> int
+    pass
+```
+
+Avoid importing `typing` into the Python 2.0-compatible core. Python 2.0 does
+not provide it, and a typing backport is not required for the VM runtime.
+Broad types such as `object`, `list`, and `dict` are acceptable initially;
+the VM-specific contracts provide the missing precision.
+
+For example, the VM's own contracts define these concepts independently of
+host-language naming:
+
+- VM integer: a host integer, including Python 2 `int` and `long`.
+- VM boolean: integer `0` or `1`.
+- VM text: semantic text value.
+- VM bytes: raw byte value.
+- VM state: a dictionary containing `pc`, `halt`, `stack`, and `env`.
+
+This avoids pretending that Python 2 `str` and Python 3 `str` have identical
+semantics.
+
+### Optional modern stubs
+
+If precise typing is needed for modern downstream users, add a separate stub:
+
+```text
+VM/src/core.py
+VM/src/core.pyi
+```
+
+The `.pyi` file may use modern `typing` constructs and must not be imported by
+the Python 2.0 runtime. It can describe the same implementation more
+precisely:
+
+```python
+from typing import Any, Dict, List, Optional, Tuple
+
+Instruction = Tuple[str, Any]
+State = Dict[str, Any]
+
+class VM:
+    last_state: Optional[State]
+
+    def run(
+        self,
+        program: List[Instruction],
+        state: Optional[State] = ...,
+        max_steps: Optional[int] = ...
+    ) -> State: ...
+```
+
+The stub is a convenience layer. The type comments in the implementation
+remain the development-time source-level annotations.
+
+### Recommended repository tooling
+
+Keep type-checker dependencies outside the runtime package, for example:
+
+```text
+VM/tools/
+    check-types-current.sh
+    check-types-legacy.sh
+VM/tools/requirements-mypy-current.txt
+VM/tools/requirements-mypy-legacy.txt
+```
+
+The legacy requirements file should pin only a mypy version that has been
+verified to support the desired Python 2 analysis. The current requirements
+file may track a newer mypy release.
+
+Type checking should be an additional development check. Runtime compatibility
+tests still need to run under the actual interpreters or parser environments
+described in [VM/TESTS.md](TESTS.md).
 
 ## Testing plan
 
