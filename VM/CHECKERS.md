@@ -6,6 +6,11 @@ The tools are development and validation utilities. They are expected to run on 
 
 The tools must be deterministic, explainable, and independent of AI agents, LLM systems, network services, or hosted analysis APIs.
 
+The checker must also accept source text directly. This is required for
+negative tests: the suite must be able to provide intentionally invalid
+programs such as `print(f"foo")` and assert that the appropriate rules reject
+them without creating or executing a source file.
+
 ## Core principle
 
 Use a layered compatibility pipeline:
@@ -72,6 +77,10 @@ VM/checkers/
     normalize_result.py     # optional result normalization helpers
     requirements.txt        # optional Python 3 development dependencies
 
+VM/checkers/tests/
+    test_rules.py            # positive and expected-failure checker tests
+    fixtures.py              # source-string fixtures
+
 VM/test/
     minimal.py              # Python 2.0-compatible source under test
     run_tests.py            # Python 2.0-compatible test runner
@@ -135,6 +144,62 @@ python3 VM/checkers/portable_check.py VM0/src
 ```
 
 It should accept individual files and directories, recursively discovering supported source files. It should not execute the inspected source.
+
+### Programmatic source API
+
+The checker must expose a source-text API in addition to its command-line
+interface. The API analyzes text without importing, compiling for execution,
+or running the inspected program.
+
+A minimal interface is:
+
+```python
+def check_source(source, filename="<string>", configuration=None):
+    """Return deterministic diagnostic records for source text."""
+    pass
+```
+
+Each diagnostic should contain at least:
+
+```text
+rule_id
+severity
+message
+filename
+line
+column
+```
+
+The API returns diagnostics instead of printing them. The CLI formats the
+same records as text or machine-readable output. This keeps one checker
+implementation reusable from tests, editor integrations, hooks, and the
+runtime-matrix orchestrator.
+
+Also provide a convenience predicate:
+
+```python
+def source_is_portable(source, filename="<string>", configuration=None):
+    """Return 1 when no error-severity diagnostic exists."""
+    pass
+```
+
+The predicate must be implemented in terms of `check_source()` so there is
+only one rule-execution path. `filename` is diagnostic metadata only when
+source text has already been supplied; the checker must not open or import
+that named file.
+
+### CLI and string input
+
+The command-line interface should support both paths and standard input:
+
+```text
+python3 VM/checkers/portable_check.py path/to/program.py
+cat path/to/program.py | python3 VM/checkers/portable_check.py --stdin
+```
+
+`--stdin` should use `<stdin>` as its default display name, with an optional
+`--filename` override. The CLI and programmatic API must produce equivalent
+diagnostics for equivalent source text and configuration.
 
 The checker should report:
 
@@ -248,6 +313,79 @@ Begin with a small group of high-value rules. Each rule should have a stable ide
 - `P052`: use of a version-specific API without an adapter.
 
 The MVP should not attempt to detect every unsafe shell construction. A dedicated shell-domain checker can be added later.
+
+## Positive and negative checker tests
+
+The checker test suite must include both programs expected to pass and
+programs expected to fail. A source fixture that the checker rejects is a
+successful test when rejection is expected.
+
+### Positive example
+
+This source should produce no error-severity diagnostics:
+
+```python
+import sys
+
+
+def write_message(value):
+    sys.stdout.write("value=%s\n" % value)
+```
+
+### Negative example
+
+This source should produce the relevant prohibited-syntax diagnostics:
+
+```python
+print(f"foo")
+```
+
+Depending on the configured policy, it should produce at least:
+
+- `P001` for prohibited print-based output.
+- `P041` for prohibited f-string interpolation.
+
+Tests should assert rule identifiers and severity, not merely that a generic
+failure occurred. This prevents a broken checker from passing because it
+rejects the source for an unrelated reason.
+
+### Expected-failure fixture shape
+
+Fixtures can be ordinary Python data:
+
+```python
+NEGATIVE_CASES = [
+    {
+        "name": "print and f-string",
+        "source": "print(f\\\"foo\\\")\\n",
+        "rules": ["P001", "P041"]
+    }
+]
+```
+
+The test harness calls `check_source()` directly and compares returned
+diagnostic rule IDs. It must not invoke the source under test.
+
+Every rule should have at least:
+
+1. One minimal negative source string that triggers the rule.
+2. One positive source string that looks similar but is allowed.
+3. One regression case for every discovered false positive or false negative.
+
+### Parser-failure tests
+
+Some negative examples may fail Python 3 AST parsing, particularly Python
+2-only syntax that the checker is meant to reject. The checker must still
+return structured lexical or parser diagnostics where possible.
+
+Tests should distinguish:
+
+- A prohibited construct recognized by a rule.
+- A source parse failure.
+- A checker implementation error.
+
+The checker must not silently convert every parse failure into an ordinary
+policy violation.
 
 ## Import policy
 
@@ -564,6 +702,11 @@ The source-policy checker should initially use only Python 3 standard-library mo
 - `time`.
 
 If the checker must run on Python 3.0 specifically, avoid APIs introduced after that version or declare a newer minimum for the tooling separately from the code-under-inspection.
+
+The core checker functions should be pure with respect to the filesystem and
+process environment whenever source text is supplied. Given the same source,
+filename, configuration, and checker version, they should return the same
+diagnostics in the same order.
 
 ## MVP implementation order
 
