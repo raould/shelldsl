@@ -17,3 +17,13 @@ def prnt(*values):
 def write(value):
     """Write one value without adding a newline."""
     sys.stdout.write("%s" % value)
+
+
+def int_div(left, right):
+    """Return Python-style floor division without using `//` syntax."""
+    return divmod(left, right)[0]
+
+
+def exception_value():
+    """Return the active exception value inside an except block."""
+    return sys.exc_info()[1]

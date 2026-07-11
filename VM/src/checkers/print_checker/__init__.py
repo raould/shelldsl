@@ -10,7 +10,11 @@ from checkers._framework import add_rule
 from checkers._framework import make_diagnostic
 
 
-RULE = add_rule(Severity.ERROR, "print", ["prnt", "sys.stdout.write"])
+RULE = add_rule(
+    Severity.ERROR,
+    "print",
+    ["prnt", "shelldsl_sdk.write", "sys.stdout.write"],
+)
 
 
 def check_source(source: str, filename: str = "<string>") -> List[Diagnostic]:

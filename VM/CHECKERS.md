@@ -267,6 +267,49 @@ arguments or every conversion rule. The name is intentionally distinct from
 `print` because Python 2.0 cannot provide Python 3 print-function semantics
 for the `print(...)` syntax.
 
+### SDK helper assessment
+
+The SDK should remain small. A checker alternative is not automatically a
+reason to add a shim: many prohibited constructs are best replaced directly
+with ordinary Python 2.0 syntax. The current assessment is:
+
+| Checker | SDK helper decision |
+| --- | --- |
+| `print` | **Already provided:** `prnt()` for a line and `write()` for partial output. |
+| `floor division` | **Added:** `int_div(left, right)` uses `divmod()` and avoids `//` syntax. |
+| `function or variable annotations` | No helper; use type comments. |
+| `with statement` | No helper; use explicit `try`/`finally`. |
+| `yield or generator syntax` | No helper; use an explicit list and loop. |
+| `async or await syntax` | No helper; use synchronous functions or external processes. |
+| `exception binding with as` | **Added:** `exception_value()` wraps `sys.exc_info()[1]`. |
+| `raise from exception chaining` | No helper; raise the original exception or use an explicit error result. |
+| `comprehension or generator expression` | No helper; use an explicit loop. |
+| `set literal or set operation` | No helper; use a list or dictionary where the contract permits. |
+| `decorator syntax` | No helper; apply an explicit wrapper call. |
+| `Python 2 long literal suffix` | No helper; use an ordinary integer literal. |
+| `new-style class declaration` | No helper; use the old-style class form. |
+| `assignment expression` | No helper; use a separate assignment statement. |
+| `structural pattern matching` | No helper; use `if` and `elif`. |
+| `nested function definition` | No helper; move the function to module scope and pass state. |
+| `nested class definition` | No helper; move the class to module scope. |
+| `global or nonlocal declaration` | No helper; pass explicit mutable state. |
+| `lambda expression` | No helper; use a named function. |
+| `eval() call` | No helper; parse data explicitly. |
+| `exec call` | No helper; call an explicit function or command. |
+| `globals() or locals() call` | No helper; pass an explicit dictionary. |
+| `wildcard import` | No helper; import names explicitly. |
+| `import inside a function` | No helper; use module-level imports. |
+| `implicit relative import` | No helper; use an explicit supported import form. |
+| `.format() interpolation` | No helper; use `%` formatting. |
+| `unsupported module import` | No helper; expand the verified allowlist deliberately. |
+| `module-level mutable state` | No helper; create state inside a function. |
+| `unsafe shell interpolation` | Defer a `cmd()` API until the shell boundary contract is designed. |
+| `arbitrary str() serialization` | No generic helper; choose an explicit serialization format at each boundary. |
+| `non-ASCII diagnostic literal` | No helper; use ASCII or perform explicit encoding at the I/O boundary. |
+
+The only new MVP helpers are therefore `int_div()` and
+`exception_value()`. The output helpers remain `prnt()` and `write()`.
+
 ### Syntax rules
 
 - `6d0d587`: prohibited `print` statement or print-based output.
