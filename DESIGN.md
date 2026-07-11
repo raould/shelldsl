@@ -478,22 +478,6 @@ The VM checker suite remains a separate preflight layer. It validates portable
 source; it does not prove that a host executable exists. Runtime process tests
 are the final authority for this host-side MVP.
 
-## Portable diagnostic logging
-
-The portable SDK provides `prntlog(level, message)` because Python 2.0 does
-not provide a common standard logging package. It writes diagnostics to stderr
-with the levels `VERBOSE`, `WARN`, and `ERROR`.
-
-The threshold is selected independently from two sources:
-
-- `PRNTLOGLEVEL`, an environment variable.
-- `set_prntlog_level(level)`, which sets the `PRNTLOG_LEVEL` SDK global.
-
-The effective threshold is the louder, more verbose of the two valid settings.
-Thus, either source selecting `VERBOSE` enables verbose output. If both are
-unset, the default threshold is `WARN`. Invalid environment values are
-ignored, and stdout remains reserved for program data.
-
 ## Compatibility and safety policy
 
 - Use explicit argument vectors for ordinary commands.
