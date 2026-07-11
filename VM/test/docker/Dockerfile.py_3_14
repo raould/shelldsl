@@ -1,0 +1,22 @@
+# Python 3.14 behavioral-test image for the generic VM.
+#
+# Pin BASE_IMAGE to a verified digest for release or CI use, for example:
+#
+#   docker build \
+#     --build-arg BASE_IMAGE=python:3.14-slim@sha256:<verified-digest> \
+#     --file VM/tests/docker/Dockerfile.py_3_14 \
+#     --tag shelldsl-vm-py314 .
+#
+# The default tag is convenient for local development but is not a
+# reproducible release dependency until it is pinned.
+ARG BASE_IMAGE=python:3.14-slim
+FROM ${BASE_IMAGE}
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /workspace
+
+# Copy the VM sources and compatibility tests into the image. The test runner
+# should remain usable by both this Python 3.14 image and the Python 2 image.
+COPY VM /workspace/VM
+
+CMD ["python", "VM/tests/run_tests.py"]
