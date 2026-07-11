@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Run every registered source checker against each file argument."""
 
+import importlib
 import os
+import pkgutil
 import sys
 from typing import Callable, Dict, List
 
@@ -11,18 +13,29 @@ SRC_DIR = os.path.dirname(SCRIPT_DIR)
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-from portable_check import check_print
-from portable_check import format_diagnostic
+import checkers
+from checkers._framework import format_diagnostic
 
 
 Diagnostic = Dict[str, object]
 Checker = Callable[[str, str], List[Diagnostic]]
 
-# Add future checkers here. Each checker receives source text and a filename,
-# and returns structured diagnostics without executing the inspected source.
-CHECKERS: List[tuple] = [
-    ("print", check_print),
-]
+def discover_checkers() -> List[tuple]:
+    """Discover every checker package below the checker parent directory."""
+    discovered = []
+    for module_info in pkgutil.iter_modules(checkers.__path__):
+        if module_info.name.startswith("_"):
+            continue
+        module = importlib.import_module(
+            "checkers.%s" % module_info.name
+        )
+        checker = getattr(module, "check_source", None)
+        if checker is not None:
+            discovered.append((module_info.name, checker))
+    return discovered
+
+
+CHECKERS: List[tuple] = discover_checkers()
 
 
 def check_file(filename: str) -> List[Diagnostic]:

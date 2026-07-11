@@ -48,6 +48,7 @@ The shared portable source may use:
 - `%` string formatting.
 - Stable built-ins whose behavior is tested on the target interpreters.
 - Explicit calls to `sys.stdout.write()` and `sys.stderr.write()`.
+- The small SDK output shim `shelldsl_sdk.prnt()` for simple line output.
 
 Example:
 

@@ -1,101 +1,20 @@
 #!/usr/bin/env python3
-"""Minimal source checker for prohibited print usage.
+"""Compatibility facade for the portable source checker API."""
 
-This checker is intentionally small and standalone. It accepts source text
-without importing or executing the source under inspection.
-"""
-
-import io
 import os
 import sys
-import tokenize
-from enum import Enum
-from typing import Any, Dict, List, Tuple
+from typing import List
 
-
-class Severity(Enum):
-    """Diagnostic severity levels emitted by the checker."""
-
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
-
-
-RuleId = str
-Message = str
-Rule = Tuple[RuleId, Severity, Message]
-Diagnostic = Dict[str, Any]
-
-RULES: Dict[RuleId, Rule] = {}
-
-
-class RuleRegistrationError(ValueError):
-    """Raised when a checker rule cannot be registered."""
-
-
-def add_rule(rule_id: RuleId, severity: Severity, message: Message) -> Rule:
-    """Register a rule and reject every reused rule identifier."""
-    if rule_id in RULES:
-        raise RuleRegistrationError(
-            "rule id already registered: %s" % rule_id
-        )
-    rule: Rule = (rule_id, severity, message)
-    RULES[rule_id] = rule
-    return rule
-
-
-PRINT_RULE: Rule = add_rule(
-    "P001",
-    Severity.ERROR,
-    "prohibited print usage",
-)
-
-
-def make_diagnostic(filename: str, token: Any, rule: Rule = PRINT_RULE) -> Diagnostic:
-    """Return one deterministic diagnostic for a print token."""
-    return {
-        "rule_id": rule[0],
-        "severity": rule[1],
-        "filename": filename,
-        "line": token.start[0],
-        "column": token.start[1] + 1,
-        "message": rule[2],
-    }
-
-
-def check_print(source: str, filename: str = "<string>") -> List[Diagnostic]:
-    """Return P001 diagnostics for print syntax in source text.
-
-    The tokenizer ignores comments and string contents, so source such as
-    ``message = "print("`` does not produce a false positive. Both Python 2
-    print statements and Python 3-style print calls are reported.
-    """
-    diagnostics: List[Diagnostic] = []
-    reader = io.StringIO(source).readline
-
-    try:
-        tokens = tokenize.generate_tokens(reader)
-        for token in tokens:
-            if token.type == tokenize.NAME and token.string == "print":
-                diagnostics.append(make_diagnostic(filename, token))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        # Tokenization may fail for incomplete source. Any print tokens found
-        # before the failure remain useful and are returned.
-        pass
-
-    return diagnostics
-
-
-def format_diagnostic(diagnostic: Diagnostic) -> str:
-    """Format one diagnostic for command-line output."""
-    return "%s:%s:%s: %s %s %s" % (
-        diagnostic["filename"],
-        diagnostic["line"],
-        diagnostic["column"],
-        diagnostic["rule_id"],
-        diagnostic["severity"].value,
-        diagnostic["message"],
-    )
+from checkers._framework import Diagnostic
+from checkers._framework import RULES
+from checkers._framework import RuleRegistrationError
+from checkers._framework import Rule
+from checkers._framework import Severity
+from checkers._framework import add_rule
+from checkers._framework import format_diagnostic
+from checkers._framework import make_diagnostic
+from checkers.print_checker import RULE as PRINT_RULE
+from checkers.print_checker import check_source as check_print
 
 
 def check_file(filename: str) -> List[Diagnostic]:

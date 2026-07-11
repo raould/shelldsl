@@ -265,11 +265,26 @@ If parsing fails, the checker should report the syntax failure and continue lexi
 
 ## MVP rule set
 
-Begin with a small group of high-value rules. Each rule should have a stable identifier.
+Begin with a small group of high-value rules. Each rule's message must be
+unique. Its stable identifier is the first seven hexadecimal characters of
+the SHA-1 digest of that UTF-8 message. Registration fails on duplicate
+messages and on duplicate seven-character digests.
+
+The generated identifiers for the initial rules are:
+
+- `72009db`: prohibited print usage.
+- `f0cb473`: f-string interpolation.
+
+The MVP SDK provides `shelldsl_sdk.prnt()` as a deliberately small output
+shim. It accepts positional values, separates them with one space, and adds
+one newline. It does not attempt to emulate Python 3's `print()` keyword
+arguments or every conversion rule. The name is intentionally distinct from
+`print` because Python 2.0 cannot provide Python 3 print-function semantics
+for the `print(...)` syntax.
 
 ### Syntax rules
 
-- `P001`: prohibited `print` statement or print-based output.
+- `72009db`: prohibited `print` statement or print-based output.
 - `P002`: prohibited floor division `//`.
 - `P003`: prohibited Python 3 function or variable annotations in shared source.
 - `P004`: prohibited `with` statement.
@@ -301,7 +316,7 @@ Begin with a small group of high-value rules. Each rule should have a stable ide
 ### Formatting and text rules
 
 - `P040`: `.format()` interpolation.
-- `P041`: f-string interpolation.
+- `f0cb473`: f-string interpolation.
 - `P042`: arbitrary `str(value)` used as serialization at a recognized boundary.
 - `P043`: non-ASCII diagnostic literal where ASCII is required.
 - `P044`: shell command construction using unsafe interpolation, when the checker has enough syntactic context to identify it.
@@ -342,8 +357,8 @@ print(f"foo")
 
 Depending on the configured policy, it should produce at least:
 
-- `P001` for prohibited print-based output.
-- `P041` for prohibited f-string interpolation.
+- `72009db` for prohibited print-based output.
+- `f0cb473` for prohibited f-string interpolation.
 
 Tests should assert rule identifiers and severity, not merely that a generic
 failure occurred. This prevents a broken checker from passing because it
@@ -358,7 +373,7 @@ NEGATIVE_CASES = [
     {
         "name": "print and f-string",
         "source": "print(f\\\"foo\\\")\\n",
-        "rules": ["P001", "P041"]
+        "rules": ["72009db", "f0cb473"]
     }
 ]
 ```
