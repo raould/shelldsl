@@ -71,7 +71,7 @@ categories. Each discovered `check_source()` function returns a list:
 - A non-empty list contains one or more diagnostic dictionaries.
 
 Each diagnostic contains `rule_id`, `severity`, `message`, `filename`,
-`line`, `column`, and `alternatives`. The current twelve rules all use
+`line`, `column`, and `alternatives`. The current thirty-two rules all use
 `Severity.ERROR`.
 
 `checkall.py` combines the lists from all discovered checkers for each file and
@@ -239,6 +239,26 @@ characters are used as the rule ID:
 - `312adc7`: comprehension or generator expression.
 - `4695303`: set literal or set operation.
 - `1a4ac84`: decorator syntax.
+- `aaf0a43`: Python 2 long literal suffix.
+- `0156087`: new-style class declaration.
+- `9785b12`: assignment expression.
+- `22f464a`: structural pattern matching.
+- `1244314`: nested function definition.
+- `a29656b`: nested class definition.
+- `4d3a424`: global or nonlocal declaration.
+- `d96b1fc`: lambda expression.
+- `c514cfa`: eval() call.
+- `7316fb0`: exec call.
+- `38347bd`: globals() or locals() call.
+- `70772ae`: wildcard import.
+- `e91a391`: import inside a function.
+- `d42ed99`: implicit relative import.
+- `1ccb3c4`: .format() interpolation.
+- `f50656d`: unsupported module import.
+- `1586818`: module-level mutable state.
+- `9a26b00`: unsafe shell interpolation.
+- `e77202c`: arbitrary str() serialization.
+- `8deafa3`: non-ASCII diagnostic literal.
 
 The MVP SDK provides `shelldsl_sdk.prnt()` as a deliberately small output
 shim. It accepts positional values, separates them with one space, and adds
@@ -261,11 +281,11 @@ for the `print(...)` syntax.
 - `4695303`: prohibited set literal or set operation when not part of the supported contract.
 - `1a4ac84`: prohibited decorator.
 
-The following planned rules are not implemented and must not be reported as
-part of the current MVP: nested definitions, lambdas, mutable module state,
-`global` or `nonlocal`, prohibited calls, import policy, `.format()` usage,
-long literals, assignment expressions, pattern matching, and shell-command
-interpolation.
+The twenty additional rule-based checkers are now implemented. Each has its
+own package under `VM/src/checkers/`, exposes `check_source(source, filename)`,
+and is discovered automatically by `checkall.py`. AST-based rules return `[]`
+when Python 3 cannot parse the source; token-based rules report findings that
+remain available before tokenization fails.
 
 ## Positive and negative checker tests
 
@@ -362,7 +382,7 @@ The framework supports three severity values:
 - `Severity.WARNING`
 - `Severity.INFO`
 
-All twelve concrete MVP rules currently register as `Severity.ERROR`.
+All thirty-two concrete MVP rules currently register as `Severity.ERROR`.
 `checkall.py` treats any returned diagnostic as a failure and treats an empty
 diagnostic list (`[]`) as a pass. There is currently no warning filtering,
 strict mode, or severity promotion.

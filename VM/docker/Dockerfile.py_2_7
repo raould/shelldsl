@@ -1,0 +1,28 @@
+# Python 2.7 behavioral-test image for the generic VM.
+#
+# The base image is intentionally configurable because old Python images and
+# their package repositories may move or become unavailable over time.
+# Pin BASE_IMAGE to a verified digest for release or CI use, for example:
+#
+#   docker build \
+#     --build-arg BASE_IMAGE=python:2.7-slim@sha256:<verified-digest> \
+#     --file VM/tests/docker/Dockerfile.py27 \
+#     --tag shelldsl-vm-py27 .
+#
+# For local development, the default tag is convenient but should not be
+# treated as a reproducible release dependency.
+ARG BASE_IMAGE=python:2.7-slim
+FROM ${BASE_IMAGE}
+
+# Keep the image independent of modern Python packages and test frameworks.
+# The compatibility runner is expected to be part of the repository.
+ENV PYTHONUNBUFFERED=1
+WORKDIR /workspace
+
+# Copy the VM sources and compatibility tests into the image. This keeps the
+# release-style image independent of the host working tree after build time.
+COPY VM /workspace/VM
+
+# The test runner must remain Python 2.0-compatible even though this image
+# executes it with Python 2.7.
+CMD ["python", "VM/tests/run_tests.py"]
