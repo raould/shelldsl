@@ -303,6 +303,98 @@ Do not assume the following are available in Python 2.0:
 
 A library may use a later module only in a version-specific adapter outside the shared portable core.
 
+## Remaining prohibited-syntax coverage plan
+
+The current checker suite covers all prohibited syntax items that can be
+determined from one source file. Implicit relative imports remain
+context-dependent and are planned as a separate validation stage.
+
+### Recently implemented source checkers
+
+The following rules are implemented as independently discovered checkers:
+
+1. **Dictionary unpacking**
+    - Inspect `ast.Dict` nodes for entries whose key is `None`, covering
+      `{**values}`.
+    - Inspect `ast.Call` keywords for `keyword.arg is None`, covering
+      `function(**values)`.
+    - Report the unpacking expression's line and column.
+
+2. **Keyword-only arguments**
+    - Inspect `ast.arguments.kwonlyargs`.
+    - Report the containing function definition.
+    - Include keyword-only arguments with and without defaults.
+
+3. **Positional-only arguments**
+    - Inspect `ast.arguments.posonlyargs` when available.
+    - Report the containing function definition.
+    - On older checker runtimes where the attribute is absent, treat it as an
+      empty list rather than failing the checker.
+
+4. **`True` and `False` constants**
+    - Add a token checker for `NAME` tokens named `True` or `False`.
+    - This avoids false positives inside comments and strings.
+    - The rule should state that integer `0` and `1` are required only where a
+      value crosses the documented VM or library boundary; it should not claim
+      that every internal truth test is semantically invalid.
+
+5. **`super()` calls**
+    - Inspect `ast.Call` nodes whose function is the name `super`.
+    - Do not reject an unrelated attribute such as `compat.super`; the MVP
+      rule is specifically for the built-in call form.
+
+6. **Set construction and set operations**
+    - Extend the existing set checker to detect `set(...)` calls in addition to
+      set literals and set comprehensions.
+    - Optionally detect statically obvious set methods such as `.union()`,
+      `.intersection()`, `.difference()`, and `.add()` only when the receiver
+      is known to be a set.
+    - Do not attempt to infer arbitrary runtime types. If a complete set
+      operation policy is required, use an explicit type/configuration stage.
+
+Each source checker has a unique message registered through
+`add_rule()`, a source-string API, a minimal negative fixture, a similar
+positive fixture, and regression coverage for false positives.
+
+### Implement with project-context validation
+
+**Implicit relative imports** cannot be determined reliably from one source
+file. `from package import name` may be an absolute import or an intended
+Python 2 implicit-relative import depending on the package layout and import
+configuration. A file-only checker that rejects every level-zero
+`ImportFrom` would produce unacceptable false positives.
+
+Implement this through a separate import-resolution stage:
+
+1. Discover the target package root and module paths.
+2. Read an explicit import-policy configuration containing package roots and
+    approved absolute modules.
+3. Resolve each import without importing target modules or executing import
+    time code.
+4. Report an implicit-relative-import diagnostic when Python 2 resolution
+    could select a sibling/local module but the source has no explicit relative
+    marker.
+5. Add fixtures containing both an ambiguous sibling import and an approved
+    absolute import.
+
+Until that context-aware stage exists, the current checker should remain
+conservative and must not claim complete implicit-relative-import coverage.
+
+### Remaining implementation order
+
+1. Context-aware import resolution.
+
+For each future checker or validation stage:
+
+1. Register the rule through `add_rule()`; never hand-write its ID.
+2. Add source-string positive and negative tests.
+3. Run `checkall.py` against all existing fixtures.
+4. Verify that SDK fixtures remain clean.
+5. Record whether parser failures prevent the checker from running.
+
+The import-resolution stage requires a package-root and configuration
+contract that the current `checkall.py` command does not yet provide.
+
 ## Static typing during development
 
 The primary purpose of static types is to find bugs while developing the VM and portable libraries. Downstream typed APIs are a secondary benefit.

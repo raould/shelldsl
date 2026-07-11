@@ -71,7 +71,7 @@ categories. Each discovered `check_source()` function returns a list:
 - A non-empty list contains one or more diagnostic dictionaries.
 
 Each diagnostic contains `rule_id`, `severity`, `message`, `filename`,
-`line`, `column`, and `alternatives`. The current thirty-two rules all use
+`line`, `column`, and `alternatives`. The current thirty-seven rules all use
 `Severity.ERROR`.
 
 `checkall.py` combines the lists from all discovered checkers for each file and
@@ -259,6 +259,11 @@ characters are used as the rule ID:
 - `9a26b00`: unsafe shell interpolation.
 - `e77202c`: arbitrary str() serialization.
 - `8deafa3`: non-ASCII diagnostic literal.
+- `1abe6a0`: dictionary unpacking.
+- `a999712`: keyword-only arguments.
+- `d0d6965`: positional-only arguments.
+- `37df0c7`: True or False constant.
+- `e9a50a5`: super() call.
 
 The MVP SDK provides `shelldsl_sdk.prnt()` as a deliberately small output
 shim. It accepts positional values, separates them with one space, and adds
@@ -324,9 +329,10 @@ The only new MVP helpers are therefore `int_div()` and
 - `4695303`: prohibited set literal or set operation when not part of the supported contract.
 - `1a4ac84`: prohibited decorator.
 
-The twenty additional rule-based checkers are now implemented. Each has its
-own package under `VM/src/checkers/`, exposes `check_source(source, filename)`,
-and is discovered automatically by `checkall.py`. AST-based rules return `[]`
+The twenty additional rule-based checkers, plus these five source-level
+coverage checkers, are now implemented. Each has its own package under
+`VM/src/checkers/`, exposes `check_source(source, filename)`, and is discovered
+automatically by `checkall.py`. AST-based rules return `[]`
 when Python 3 cannot parse the source; token-based rules report findings that
 remain available before tokenization fails.
 
@@ -425,7 +431,7 @@ The framework supports three severity values:
 - `Severity.WARNING`
 - `Severity.INFO`
 
-All thirty-two concrete MVP rules currently register as `Severity.ERROR`.
+All thirty-seven concrete MVP rules currently register as `Severity.ERROR`.
 `checkall.py` treats any returned diagnostic as a failure and treats an empty
 diagnostic list (`[]`) as a pass. There is currently no warning filtering,
 strict mode, or severity promotion.
