@@ -2,6 +2,75 @@
 
 import sys
 
+try:
+    basestring
+except NameError:
+    basestring = str
+
+
+VERBOSE = 10
+WARN = 30
+ERROR = 40
+PRNTLOG_LEVEL = None
+_DEFAULT_PRNTLOG_LEVEL = WARN
+
+
+def _level_from_name(value):
+    if value is None:
+        return None
+    value = value.upper()
+    if value == "VERBOSE":
+        return VERBOSE
+    if value == "WARN":
+        return WARN
+    if value == "ERROR":
+        return ERROR
+    return None
+
+
+def set_prntlog_level(level):
+    """Set or clear the programmatic PRNTLOG threshold."""
+    global PRNTLOG_LEVEL
+    if level is None:
+        PRNTLOG_LEVEL = None
+        return
+    if isinstance(level, basestring):
+        level = _level_from_name(level)
+    if level not in (VERBOSE, WARN, ERROR):
+        raise ValueError("invalid PRNTLOG level")
+    PRNTLOG_LEVEL = level
+
+
+def _effective_prntlog_level():
+    environment_level = _level_from_name(
+        __import__("os").environ.get("PRNTLOGLEVEL")
+    )
+    if PRNTLOG_LEVEL is None:
+        if environment_level is None:
+            return _DEFAULT_PRNTLOG_LEVEL
+        return environment_level
+    if environment_level is None:
+        return PRNTLOG_LEVEL
+    if PRNTLOG_LEVEL < environment_level:
+        return PRNTLOG_LEVEL
+    return environment_level
+
+
+def prntlog(level, message):
+    """Write a gated diagnostic to stderr."""
+    if isinstance(level, basestring):
+        level = _level_from_name(level)
+    if level is None or level < _effective_prntlog_level():
+        return
+    if level == VERBOSE:
+        label = "VERBOSE"
+    elif level == WARN:
+        label = "WARN"
+    else:
+        label = "ERROR"
+    sys.stderr.write("[shelldsl:%s] %s\n" % (label, message))
+    sys.stderr.flush()
+
 
 def prnt(*values):
     """Write values separated by spaces and terminated by a newline."""

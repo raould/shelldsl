@@ -49,7 +49,43 @@ The shared portable source may use:
 - Stable built-ins whose behavior is tested on the target interpreters.
 - Explicit calls to `sys.stdout.write()` and `sys.stderr.write()`.
 - The small SDK shims `shelldsl_sdk.prnt()`, `shelldsl_sdk.write()`,
-  `shelldsl_sdk.int_div()`, and `shelldsl_sdk.exception_value()`.
+    `shelldsl_sdk.prntlog()`, `shelldsl_sdk.int_div()`, and
+    `shelldsl_sdk.exception_value()`.
+
+## Portable diagnostic logging
+
+Python 2.0 has no dependable standard logging package shared with later
+Python versions. Portable diagnostics therefore use the SDK's
+`shelldsl_sdk.prntlog(level, message)`, which writes to stderr using only
+`sys.stderr.write()` and `%` formatting.
+
+The SDK exposes `VERBOSE`, `WARN`, and `ERROR` levels. Output is enabled when
+the message level is at least as important as the effective threshold. The
+effective threshold is the more verbose of these two configured thresholds:
+
+1. The `PRNTLOGLEVEL` environment variable.
+2. The programmatic `shelldsl_sdk.set_prntlog_level(level)` setting, backed by
+     the `shelldsl_sdk.PRNTLOG_LEVEL` global.
+
+`VERBOSE` is the louder setting: if either source selects `VERBOSE`, verbose
+messages are enabled even when the other source is unset or selects `WARN` or
+`ERROR`. An unset or invalid environment value does not override a valid
+programmatic value. If both are unset, the default threshold is `WARN`.
+
+Example:
+
+```python
+from shelldsl_sdk import ERROR, VERBOSE, prntlog, set_prntlog_level
+
+set_prntlog_level(VERBOSE)
+prntlog(VERBOSE, "starting operation")
+prntlog(ERROR, "operation failed")
+```
+
+The logger must not write diagnostic output to stdout, must flush stderr after
+each message, and must not raise a secondary exception when stderr is
+unavailable. Logging is a compatibility boundary and is not a replacement
+for structured program results.
 
 Example:
 
