@@ -17,26 +17,43 @@ EXPECTED_FAILS_DIR = os.path.join(os.path.dirname(__file__), "expected_fails")
 
 
 class ExpectedFailureFixtureTests(unittest.TestCase):
-    def test_every_fixture_produces_static_diagnostics(self):
-        filenames = sorted(
-            os.path.join(EXPECTED_FAILS_DIR, name)
-            for name in os.listdir(EXPECTED_FAILS_DIR)
-            if name.endswith(".py") and os.path.isfile(
-                os.path.join(EXPECTED_FAILS_DIR, name)
-            )
-        )
+    def test_expected_fail_directory_is_not_empty(self):
         self.assertTrue(
-            filenames,
+            _fixture_filenames(),
             "expected_fails must contain at least one Python fixture",
         )
 
-        for filename in filenames:
-            with self.subTest(filename=os.path.basename(filename)):
-                diagnostics = checkall.check_file(filename)
-                self.assertTrue(
-                    diagnostics,
-                    "static checking reported no diagnostics for %s" % filename,
-                )
+
+def _fixture_filenames():
+    return sorted(
+        os.path.join(EXPECTED_FAILS_DIR, name)
+        for name in os.listdir(EXPECTED_FAILS_DIR)
+        if name.endswith(".py") and os.path.isfile(
+            os.path.join(EXPECTED_FAILS_DIR, name)
+        )
+    )
+
+
+def _make_fixture_test(filename):
+    def test_fixture(self):
+        diagnostics = checkall.check_file(filename)
+        self.assertTrue(
+            diagnostics,
+            "static checking reported no diagnostics for %s" % filename,
+        )
+
+    return test_fixture
+
+
+for _filename in _fixture_filenames():
+    _test_name = "test_fixture_%s" % os.path.splitext(
+        os.path.basename(_filename)
+    )[0]
+    setattr(
+        ExpectedFailureFixtureTests,
+        _test_name,
+        _make_fixture_test(_filename),
+    )
 
 
 if __name__ == "__main__":
