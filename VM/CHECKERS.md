@@ -62,39 +62,6 @@ The MVP does not attempt to:
 - Depend on third-party hosted services.
 - Replace domain-specific tests for shells, filesystems, processes, encodings, or external tools.
 
-## Repository layout
-
-A proposed layout is:
-
-```text
-VM/
-    CHECKERS.md
-
-VM/checkers/
-    portable_check.py       # standalone source-policy checker
-    rules.py                # rule definitions and rule helpers
-    run_matrix.py           # Docker/interpreter orchestration
-    normalize_result.py     # optional result normalization helpers
-    requirements.txt        # optional Python 3 development dependencies
-
-VM/checkers/tests/
-    test_rules.py            # positive and expected-failure checker tests
-    fixtures.py              # source-string fixtures
-
-VM/test/
-    minimal.py              # Python 2.0-compatible source under test
-    run_tests.py            # Python 2.0-compatible test runner
-
-VM/test/docker/
-    Dockerfile.py_2_7
-    Dockerfile.py_3_14
-
-VM/test/scripts/
-    minimal.sh               # simple Docker build/run wrapper
-```
-
-The tools may later move to a repository-level `tools/` directory. Their location does not affect the design; their standalone behavior does.
-
 ## Result model
 
 Every stage should produce an explicit result category.
@@ -136,25 +103,25 @@ The overall command should return `0` only when all required stages pass. Option
 
 ## Tool 1: source-policy checker
 
-The first MVP tool should be a standalone Python 3 program:
+The first MVP tool is the standalone Python 3 dispatcher:
 
 ```text
-python3 VM/checkers/portable_check.py VM/test/minimal.py
-python3 VM/checkers/portable_check.py VM0/src
+python3 VM/scripts/checkall.py VM/test/minimal.py
+python3 VM/scripts/checkall.py VM0/src
 ```
 
 It should accept individual files and directories, recursively discovering supported source files. It should not execute the inspected source.
 
 ### Programmatic source API
 
-The checker must expose a source-text API in addition to its command-line
-interface. The API analyzes text without importing, compiling for execution,
-or running the inspected program.
+Each checker package under `VM/src/checkers/` must expose a source-text API in
+addition to the dispatcher command-line interface. The API analyzes text
+without importing, compiling for execution, or running the inspected program.
 
 A minimal interface is:
 
 ```python
-def check_source(source, filename="<string>", configuration=None):
+def check_source(source, filename="<string>"):
     """Return deterministic diagnostic records for source text."""
     pass
 ```
@@ -175,31 +142,23 @@ same records as text or machine-readable output. This keeps one checker
 implementation reusable from tests, editor integrations, hooks, and the
 runtime-matrix orchestrator.
 
-Also provide a convenience predicate:
-
-```python
-def source_is_portable(source, filename="<string>", configuration=None):
-    """Return 1 when no error-severity diagnostic exists."""
-    pass
-```
-
-The predicate must be implemented in terms of `check_source()` so there is
-only one rule-execution path. `filename` is diagnostic metadata only when
-source text has already been supplied; the checker must not open or import
-that named file.
+`checkall.py` calls every discovered `check_source()` function and formats the
+combined diagnostics. `filename` is diagnostic metadata only when source text
+has already been supplied; a checker must not open or import that named file.
 
 ### CLI and string input
 
 The command-line interface should support both paths and standard input:
 
+The dispatcher accepts one or more source paths:
+
 ```text
-python3 VM/checkers/portable_check.py path/to/program.py
-cat path/to/program.py | python3 VM/checkers/portable_check.py --stdin
+python3 VM/scripts/checkall.py path/to/program.py
+python3 VM/scripts/checkall.py first.py second.py
 ```
 
-`--stdin` should use `<stdin>` as its default display name, with an optional
-`--filename` override. The CLI and programmatic API must produce equivalent
-diagnostics for equivalent source text and configuration.
+The command-line dispatcher and programmatic checker APIs produce equivalent
+diagnostics for equivalent source text.
 
 The checker should report:
 
@@ -495,8 +454,8 @@ The checker must verify the selected legacy mypy release experimentally. It must
 Type checking should be optional in the source-policy MVP:
 
 ```text
-portable_check.py --no-types SOURCE
-portable_check.py --types SOURCE
+checkall.py --no-types SOURCE
+checkall.py --types SOURCE
 ```
 
 A mypy failure should be reported distinctly from a syntax-policy failure.
