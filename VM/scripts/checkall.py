@@ -16,6 +16,10 @@ if SRC_DIR not in sys.path:
 
 import checkers
 from checkers._framework import format_diagnostic
+from checkers._support import (
+    clear_inspection_context,
+    prepare_inspection_context,
+)
 
 
 Diagnostic = Dict[str, object]
@@ -48,9 +52,21 @@ def check_file(filename: str) -> List[Diagnostic]:
         handle.close()
 
     diagnostics: List[Diagnostic] = []
-    for checker_name, checker in CHECKERS:
-        checker_diagnostics = checker(source, filename)
-        diagnostics.extend(checker_diagnostics)
+    context = prepare_inspection_context(source, filename)
+    try:
+        for checker_name, checker in CHECKERS:
+            context_checker = getattr(
+                importlib.import_module(checker.__module__),
+                "check_context",
+                None,
+            )
+            if context_checker is not None:
+                checker_diagnostics = context_checker(context)
+            else:
+                checker_diagnostics = checker(source, filename)
+            diagnostics.extend(checker_diagnostics)
+    finally:
+        clear_inspection_context()
     return diagnostics
 
 
