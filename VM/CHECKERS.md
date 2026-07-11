@@ -6,10 +6,10 @@ The tools are development and validation utilities. They are expected to run on 
 
 The tools must be deterministic, explainable, and independent of AI agents, LLM systems, network services, or hosted analysis APIs.
 
-The checker must also accept source text directly. This is required for
-negative tests: the suite must be able to provide intentionally invalid
-programs such as `print(f"foo")` and assert that the appropriate rules reject
-them without creating or executing a source file.
+Each checker must accept source text directly. This is required for negative
+tests: the suite can provide intentionally invalid programs such as
+`print(f"foo")` and assert that the appropriate rules reject them without
+creating or executing a source file.
 
 ## Core principle
 
@@ -62,7 +62,7 @@ The MVP does not attempt to:
 - Depend on third-party hosted services.
 - Replace domain-specific tests for shells, filesystems, processes, encodings, or external tools.
 
-## Result model
+## Pipeline result model
 
 Every stage should produce an explicit result category.
 
@@ -103,14 +103,16 @@ The overall command should return `0` only when all required stages pass. Option
 
 ## Tool 1: source-policy checker
 
-The first MVP tool is the standalone Python 3 dispatcher:
+The current MVP tool is the standalone Python 3 dispatcher:
 
 ```text
 python3 VM/scripts/checkall.py VM/test/minimal.py
 python3 VM/scripts/checkall.py VM0/src
 ```
 
-It should accept individual files and directories, recursively discovering supported source files. It should not execute the inspected source.
+It accepts individual file paths and does not execute the inspected source.
+Directory traversal, standard-input support, type checking, and runtime
+orchestration are not implemented by the current dispatcher.
 
 ### Programmatic source API
 
@@ -126,7 +128,7 @@ def check_source(source, filename="<string>"):
     pass
 ```
 
-Each diagnostic should contain at least:
+Each diagnostic currently contains:
 
 ```text
 rule_id
@@ -135,6 +137,7 @@ message
 filename
 line
 column
+alternatives
 ```
 
 The API returns diagnostics instead of printing them. The CLI formats the
@@ -160,67 +163,56 @@ python3 VM/scripts/checkall.py first.py second.py
 The command-line dispatcher and programmatic checker APIs produce equivalent
 diagnostics for equivalent source text.
 
-The checker should report:
+The dispatcher reports:
 
 - File path.
 - One-based line and column.
 - Rule identifier.
 - Severity.
 - Short explanation.
-- Optional remediation guidance.
+- Suggested alternatives.
 
 Example:
 
 ```text
-VM0/src/example.py:14:5: 6d0d587 print
-VM0/src/example.py:22:1: f427411 function or variable annotations
+VM0/src/example.py:14:5: [6d0d587] [ERROR] disallowed: 'print'. alternatives: prnt,sys.stdout.write
+VM0/src/example.py:22:1: [f427411] [ERROR] disallowed: 'function or variable annotations'. alternatives: type comments
 ```
 
-The initial command-line interface can use `sys.argv` so the checker itself remains executable on Python 3.0. If the minimum checker runtime is later raised, `argparse` may be used.
+The dispatcher uses `sys.argv` and returns `2` when no source paths are
+provided, `1` when a file is missing or any diagnostic is returned, and `0`
+when every checked file returns an empty diagnostic list.
 
-## Lexical checks
+## Implemented checker behavior
 
-Run lexical checks before AST parsing. Python 3's AST parser cannot parse every Python 2-only construct, so token checks must be able to report useful findings even when AST parsing fails.
+The dispatcher discovers packages below `VM/src/checkers/` with
+`pkgutil.iter_modules()`. A package is a checker when it exposes
+`check_source(source, filename)`. Packages whose names begin with `_` are
+ignored. Each checker returns a list of diagnostic dictionaries; returning
+`[]` means that checker passes the source. There is no `PASS` member in the
+checker severity enum.
 
-Use Python 3's `tokenize` module for checks such as:
+The shared framework defines exactly three severity values:
 
-- `//` floor division.
-- Python 2 print statements.
-- `except Exception, error` syntax.
-- `long` suffixes such as `1L`.
-- Forbidden keywords.
-- Exact formatting forms.
-- Forbidden source encodings, if an encoding policy is adopted.
+- `Severity.ERROR`
+- `Severity.WARNING`
+- `Severity.INFO`
 
-The lexical scanner must avoid false positives inside strings and comments. It should operate on tokens rather than raw substring searches wherever possible.
+All currently implemented rules use `Severity.ERROR`. The severity value is
+stored in each diagnostic and formatted as uppercase text by the dispatcher.
+`PASS`, `FAIL`, `SKIP`, and similar values describe higher-level pipeline
+stages only; they are not checker severities.
+
+Token-based checkers use Python's `tokenize` module and AST-based checkers use
+Python's `ast` module when parsing succeeds. A checker that cannot obtain an
+AST currently returns `[]`; lexical checkers can still report findings from
+tokens available before a tokenization error.
 
 ## AST checks
 
-After lexical checks, parse files with Python 3's `ast` module when possible.
-
-AST checks are useful for:
-
-- Function annotations.
-- Variable annotations.
-- Nested functions.
-- Nested classes.
-- Decorators.
-- List, set, and dictionary comprehensions.
-- Generator expressions.
-- Set literals.
-- `with` statements.
-- `yield` and generator functions.
-- `async` and `await` syntax.
-- Assignment expressions.
-- Pattern matching.
-- `raise ... from ...`.
-- `class X(object)`.
-- Calls to prohibited APIs.
-- Module-level mutable assignments.
-- Wildcard imports.
-- Imports inside functions.
-
-If parsing fails, the checker should report the syntax failure and continue lexical checks where possible. It should not report an AST pass merely because the AST stage was skipped.
+The current AST-based checkers parse with Python 3's `ast` module. They report
+their findings when parsing succeeds and return `[]` when parsing fails. They
+do not currently emit a separate parser-failure diagnostic.
 
 ## MVP rule set
 
@@ -229,7 +221,9 @@ unique. Its stable identifier is the first seven hexadecimal characters of
 the SHA-1 digest of that UTF-8 message. Registration fails on duplicate
 messages and on duplicate seven-character digests.
 
-The generated identifiers for the currently implemented rules are:
+The generated identifiers for the currently implemented rules are derived
+from the SHA-1 digest of each rule message. The first seven hexadecimal
+characters are used as the rule ID:
 
 - `6d0d587`: print.
 - `003d1d9`: f-string.
@@ -264,39 +258,12 @@ for the `print(...)` syntax.
 - `312adc7`: prohibited comprehension.
 - `4695303`: prohibited set literal or set operation when not part of the supported contract.
 - `1a4ac84`: prohibited decorator.
-- `P012`: prohibited `class X(object)`.
-- `P013`: prohibited assignment expression or pattern matching.
-- `P014`: prohibited Python 2 long literal suffix.
 
-### Structure and API rules
-
-- `P020`: nested function definition.
-- `P021`: nested class definition.
-- `P022`: lambda expression, if lambda is excluded by project policy.
-- `P023`: module-level mutable state.
-- `P024`: use of `global` or `nonlocal`.
-- `P025`: call to `eval`.
-- `P026`: call to `exec`.
-- `P027`: call to `globals` or `locals`.
-- `P028`: wildcard import.
-- `P029`: implicit relative import.
-- `P030`: import inside a function.
-
-### Formatting and text rules
-
-- `P040`: `.format()` interpolation.
-- `f0cb473`: f-string interpolation.
-- `P042`: arbitrary `str(value)` used as serialization at a recognized boundary.
-- `P043`: non-ASCII diagnostic literal where ASCII is required.
-- `P044`: shell command construction using unsafe interpolation, when the checker has enough syntactic context to identify it.
-
-### Import rules
-
-- `P050`: import outside the allowlist.
-- `P051`: use of a module unavailable on the required historical target.
-- `P052`: use of a version-specific API without an adapter.
-
-The MVP should not attempt to detect every unsafe shell construction. A dedicated shell-domain checker can be added later.
+The following planned rules are not implemented and must not be reported as
+part of the current MVP: nested definitions, lambdas, mutable module state,
+`global` or `nonlocal`, prohibited calls, import policy, `.format()` usage,
+long literals, assignment expressions, pattern matching, and shell-command
+interpolation.
 
 ## Positive and negative checker tests
 
@@ -326,8 +293,8 @@ print(f"foo")
 
 Depending on the configured policy, it should produce at least:
 
-- `72009db` for prohibited print-based output.
-- `f0cb473` for prohibited f-string interpolation.
+- `6d0d587` for prohibited print-based output.
+- `003d1d9` for prohibited f-string interpolation.
 
 Tests should assert rule identifiers and severity, not merely that a generic
 failure occurred. This prevents a broken checker from passing because it
@@ -342,7 +309,7 @@ NEGATIVE_CASES = [
     {
         "name": "print and f-string",
         "source": "print(f\\\"foo\\\")\\n",
-        "rules": ["72009db", "f0cb473"]
+        "rules": ["6d0d587", "003d1d9"]
     }
 ]
 ```
@@ -356,24 +323,18 @@ Every rule should have at least:
 2. One positive source string that looks similar but is allowed.
 3. One regression case for every discovered false positive or false negative.
 
-### Parser-failure tests
+### Parser-failure behavior
 
-Some negative examples may fail Python 3 AST parsing, particularly Python
-2-only syntax that the checker is meant to reject. The checker must still
-return structured lexical or parser diagnostics where possible.
+The current AST-based checkers return `[]` when Python 3 cannot parse the
+source. Token-based checkers may still return findings from tokens produced
+before tokenization fails. A parse failure is not currently represented as a
+separate diagnostic or severity.
 
-Tests should distinguish:
+## Planned import policy
 
-- A prohibited construct recognized by a rule.
-- A source parse failure.
-- A checker implementation error.
-
-The checker must not silently convert every parse failure into an ordinary
-policy violation.
-
-## Import policy
-
-Use an allowlist for the portable core rather than a denylist. A denylist allows new or overlooked modules to enter silently.
+Import allowlisting is not implemented by the current MVP. When it is added,
+use an allowlist for the portable core rather than a denylist. A denylist
+allows new or overlooked modules to enter silently.
 
 An initial allowlist may contain only modules verified for the project's target:
 
@@ -385,25 +346,24 @@ time
 math
 ```
 
-The checker should inspect import syntax without importing the target module. Static checking must not execute import-time code from the inspected project.
+The future checker should inspect import syntax without importing the target
+module. Static checking must not execute import-time code from the inspected
+project.
 
 The allowlist should be configurable so separate domains can add approved adapters without changing the checker implementation.
 
 ## Rule severity
 
-Use severity to distinguish mandatory portability violations from recommendations:
+The framework supports three severity values:
 
-- `error`: fails the source-policy stage.
-- `warning`: reported but does not fail by default.
-- `info`: informational guidance.
+- `Severity.ERROR`
+- `Severity.WARNING`
+- `Severity.INFO`
 
-For example:
-
-- `print` usage: `error`.
-- `lambda` usage: `warning` initially, if the policy is not yet final.
-- module-level immutable constants: `info` or allowed.
-
-A strict mode may promote warnings to errors.
+All twelve concrete MVP rules currently register as `Severity.ERROR`.
+`checkall.py` treats any returned diagnostic as a failure and treats an empty
+diagnostic list (`[]`) as a pass. There is currently no warning filtering,
+strict mode, or severity promotion.
 
 ## Configuration
 
@@ -419,9 +379,10 @@ portable.max_output
 portable.docker_images
 ```
 
-The MVP may use command-line options or a plain configuration format. Avoid requiring a modern configuration library for the checker itself.
+Configuration is not implemented by the current dispatcher. Avoid describing
+the options below as available until configuration support is added.
 
-Recommended options:
+Planned options:
 
 ```text
 --strict
@@ -433,7 +394,7 @@ Recommended options:
 --python-target 2.0
 ```
 
-The checker should print its effective configuration in verbose mode so results are reproducible.
+The current dispatcher does not print an effective configuration.
 
 ## Static type checking
 
@@ -451,14 +412,16 @@ The project may run:
 
 The checker must verify the selected legacy mypy release experimentally. It must not assume that mypy 0.971 or any later release still supports Python 2 analysis.
 
-Type checking should be optional in the source-policy MVP:
+Type checking is planned but is not implemented in the current source-policy
+MVP:
 
 ```text
 checkall.py --no-types SOURCE
 checkall.py --types SOURCE
 ```
 
-A mypy failure should be reported distinctly from a syntax-policy failure.
+A future type-checking stage should report mypy failures distinctly from
+syntax-policy failures.
 
 ## Why lint is not enough
 

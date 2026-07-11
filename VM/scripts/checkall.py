@@ -22,7 +22,7 @@ Diagnostic = Dict[str, object]
 Checker = Callable[[str, str], List[Diagnostic]]
 
 def discover_checkers() -> List[tuple]:
-    """Discover every checker package below the checker parent directory."""
+    """Discover every checker package (implements `check_source()`) below the checker parent directory."""
     discovered = []
     for module_info in pkgutil.iter_modules(checkers.__path__):
         if module_info.name.startswith("_"):
