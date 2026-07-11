@@ -303,58 +303,61 @@ Do not assume the following are available in Python 2.0:
 
 A library may use a later module only in a version-specific adapter outside the shared portable core.
 
+## Next static inspection tool
+
+The next static tool should be a shared **AST inspection context**, not a
+second standalone AST parser. The current checker suite already uses
+`ast.parse()` and `ast.walk()` for annotations, comprehensions, decorators,
+imports, classes, calls, and function arguments. The next layer should remove
+the repeated parsing and provide consistent context to every checker.
+
+The context should be created once per source file and contain:
+
+- Original source text.
+- Filename.
+- Token stream.
+- Python 3 AST when parsing succeeds.
+- Parent-node relationships.
+- Function, class, and module scope boundaries.
+- Package and module path information when available.
+- Import-policy configuration.
+
+The existing `check_source(source, filename)` API should remain supported.
+The context is an internal framework detail initially; future checkers may
+consume it through shared helpers rather than parsing the same source again.
+
+The inspection layer must distinguish these conditions:
+
+1. Source successfully tokenized and parsed.
+2. Source tokenized but Python 3 AST parsing failed because it contains
+    Python 2-only syntax.
+3. Tokenization failed or the checker itself failed.
+
+Python 3 AST parse failure must not automatically mean that the source is
+invalid: Python 2-only constructs may be exactly what a lexical checker is
+intended to identify. Lexical findings available before a failure must be
+preserved, and checker/tooling errors must remain distinct from source
+diagnostics.
+
+### Static inspection implementation order
+
+1. Build one token and AST context per input file.
+2. Add parent and scope indexes for AST-based rules.
+3. Migrate existing AST checkers to use the shared context.
+4. Add context-aware import resolution for implicit relative imports.
+5. Add package-root and import-policy configuration.
+6. Add fixtures for ambiguous sibling imports and approved absolute imports.
+
+The import resolver must inspect module paths without importing target modules
+or executing import-time code. A file-only AST checker cannot reliably
+distinguish `from package import name` as an absolute import from an intended
+Python 2 implicit-relative import.
+
 ## Remaining prohibited-syntax coverage plan
 
 The current checker suite covers all prohibited syntax items that can be
 determined from one source file. Implicit relative imports remain
 context-dependent and are planned as a separate validation stage.
-
-### Recently implemented source checkers
-
-The following rules are implemented as independently discovered checkers:
-
-1. **Dictionary unpacking**
-    - Inspect `ast.Dict` nodes for entries whose key is `None`, covering
-      `{**values}`.
-    - Inspect `ast.Call` keywords for `keyword.arg is None`, covering
-      `function(**values)`.
-    - Report the unpacking expression's line and column.
-
-2. **Keyword-only arguments**
-    - Inspect `ast.arguments.kwonlyargs`.
-    - Report the containing function definition.
-    - Include keyword-only arguments with and without defaults.
-
-3. **Positional-only arguments**
-    - Inspect `ast.arguments.posonlyargs` when available.
-    - Report the containing function definition.
-    - On older checker runtimes where the attribute is absent, treat it as an
-      empty list rather than failing the checker.
-
-4. **`True` and `False` constants**
-    - Add a token checker for `NAME` tokens named `True` or `False`.
-    - This avoids false positives inside comments and strings.
-    - The rule should state that integer `0` and `1` are required only where a
-      value crosses the documented VM or library boundary; it should not claim
-      that every internal truth test is semantically invalid.
-
-5. **`super()` calls**
-    - Inspect `ast.Call` nodes whose function is the name `super`.
-    - Do not reject an unrelated attribute such as `compat.super`; the MVP
-      rule is specifically for the built-in call form.
-
-6. **Set construction and set operations**
-    - Extend the existing set checker to detect `set(...)` calls in addition to
-      set literals and set comprehensions.
-    - Optionally detect statically obvious set methods such as `.union()`,
-      `.intersection()`, `.difference()`, and `.add()` only when the receiver
-      is known to be a set.
-    - Do not attempt to infer arbitrary runtime types. If a complete set
-      operation policy is required, use an explicit type/configuration stage.
-
-Each source checker has a unique message registered through
-`add_rule()`, a source-string API, a minimal negative fixture, a similar
-positive fixture, and regression coverage for false positives.
 
 ### Implement with project-context validation
 
