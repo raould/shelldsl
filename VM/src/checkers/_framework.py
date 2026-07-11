@@ -6,9 +6,9 @@ from typing import Any, Dict, Tuple
 
 
 class Severity(Enum):
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
+    ERROR = "ERROR"
+    WARNING = "WARNING"
+    INFO = "INFO"
 
 
 RuleId = str
@@ -65,12 +65,12 @@ def make_diagnostic(
 
 def format_diagnostic(diagnostic: Diagnostic) -> str:
     """Format a diagnostic for command-line output."""
-    return "%s:%s:%s: %s %s %s alternatives=%s" % (
+    return "%s:%s:%s: [%s] [%s] disallowed: '%s'. alternatives: %s" % (
         diagnostic["filename"],
         diagnostic["line"],
         diagnostic["column"],
         diagnostic["rule_id"],
         diagnostic["severity"].value,
         diagnostic["message"],
-        diagnostic["alternatives"],
+        ",".join(diagnostic["alternatives"]),
     )

@@ -9,7 +9,8 @@ from typing import Callable, Dict, List
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.dirname(SCRIPT_DIR)
+VM_DIR = os.path.dirname(SCRIPT_DIR)
+SRC_DIR = os.path.join(VM_DIR, "src")
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
