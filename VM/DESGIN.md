@@ -1,8 +1,6 @@
 # Portable Python Core Syntax
 
-This document defines a restricted Python source subset for the VM0 project.
-
-The directory was moved from `VM/` to `VM0/`; the compatibility VM remains the stricter execution layer in [VM0/DESIGN.md](../VM0/DESIGN.md). This document describes a higher-level authoring language that can be used for portable libraries without reducing every operation to VM instructions.
+This document defines a restricted Python source subset for the VM project.
 
 The target is Python 2.0-compatible source syntax and behavior, while also supporting execution on later Python 2 and Python 3 interpreters.
 
@@ -11,7 +9,6 @@ The target is Python 2.0-compatible source syntax and behavior, while also suppo
 The portable Python core is:
 
 - Ordinary Python source, not a new parser.
-- Higher-level than the instruction VM.
 - Restricted to syntax available in Python 2.0.
 - Designed to avoid behavior differences between Python 2 and Python 3.
 - Checked by source-policy checks, static analysis, and cross-version tests.
@@ -335,9 +332,9 @@ VM0/src/core.pyi
 
 The shared `.py` source remains the source of truth for runtime compatibility. The stub is optional and must not be imported by Python 2.0.
 
-## Relationship to the instruction VM
+## Relationship to the instruction VM0
 
-This restricted Python layer is higher-level than the VM instruction set:
+This restricted Python layer is higher-level than the VM0 instruction set:
 
 ```text
 portable Python subset
@@ -346,12 +343,12 @@ portable Python subset
 portable library logic
         |
         v
-VM instructions when serialization, replay, or strict isolation is needed
+VM0 instructions when serialization, replay, or strict isolation is needed
 ```
 
-Not every portable Python function must be lowered into VM bytecode. The instruction VM remains the stricter representation for programs that need explicit stack behavior, state snapshots, validation, or replay.
+Not every portable Python function must be lowered into VM0 bytecode. The instruction VM0 remains the stricter representation for programs that need explicit stack behavior, state snapshots, validation, or replay.
 
-The Python subset must not be described as automatically portable merely because it invokes the VM. Its imports, control flow, values, and host APIs must independently follow this document.
+The Python subset must not be described as automatically portable merely because it invokes the VM0. Its imports, control flow, values, and host APIs must independently follow this document.
 
 ## Enforcement plan
 
@@ -366,7 +363,7 @@ Every portable source file should pass:
 
 The source-policy checker should report the exact file and rule violated. It should distinguish a syntax violation from a runtime or platform incompatibility.
 
-The tests in [VM0/TESTS.md](../VM0/TESTS.md) should cover the implementation and this source policy. A minimal file such as [VM/test/minimal.py](../VM/test/minimal.py), if retained as a historical example, demonstrates the intended style through its use of `sys.stdout.write()` and plain Python syntax.
+The tests in [VM0/TESTS.md](../VM0/TESTS.md) should cover the implementation and this source policy. A minimal file such as [VM0/test/minimal.py](../VM0/test/minimal.py), if retained as a historical example, demonstrates the intended style through its use of `sys.stdout.write()` and plain Python syntax.
 
 ## Summary
 
