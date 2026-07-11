@@ -78,6 +78,57 @@ ctx.run(["make", "-j4"])
 `cmd` is a factory namespace, not a dynamic module. `cmd("program", ... )`
 returns a `CommandSpec`; it does not execute a process.
 
+### Command input forms
+
+The MVP supports three equivalent non-shell forms:
+
+```python
+cmd("git status --short")
+cmd(["git", "status", "--short"])
+cmd("git", "status", "--short")
+```
+
+The single-string form is intended to provide the streamlined experience of
+typing a normal command in a terminal. It is parsed with `shlex.split()`, not
+with plain whitespace splitting. Consequently, quoted argument boundaries are
+preserved:
+
+```python
+cmd('git commit -m "initial commit"')
+cmd("grep 'hello world' file.txt")
+```
+
+For a string command, the first parsed item is the executable and every
+remaining item is an argument. The executable is resolved through the active
+context's `PATH`, and the resulting argument vector is executed with
+`shell=False`.
+
+The string form is not a shell parser. It must not implicitly interpret
+`&&`, `|`, `>`, `$()`, environment expansion, or globbing. Use explicit
+pipeline objects for pipes:
+
+```python
+pipeline = cmd("ps", "aux") | cmd("grep", "python") | cmd("wc", "-l")
+```
+
+Use the list or positional forms when arguments come from variables or
+untrusted input:
+
+```python
+cmd(["git", "checkout", user_supplied_branch])
+cmd("git", "commit", "-m", commit_message)
+```
+
+Actual shell syntax is an explicit, separate boundary:
+
+```python
+cmd.shell("git status --short && echo done")
+```
+
+Only `cmd.shell()` may enable shell execution, and its input must be treated
+as trusted shell source. Ordinary `cmd()` calls must never silently fall back
+to `shell=True`.
+
 ## Design lessons implemented by the MVP
 
 ### 1. Explicit and inspectable environment
