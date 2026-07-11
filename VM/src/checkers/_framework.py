@@ -13,7 +13,7 @@ class Severity(Enum):
 
 RuleId = str
 Message = str
-Rule = Tuple[RuleId, Severity, Message]
+Rule = Tuple[RuleId, Severity, Message, list[str]]
 Diagnostic = Dict[str, Any]
 RULES: Dict[RuleId, Rule] = {}
 
@@ -28,7 +28,7 @@ def rule_id_for_message(message: Message) -> RuleId:
     return digest[:7]
 
 
-def add_rule(severity: Severity, message: Message) -> Rule:
+def add_rule(severity: Severity, message: Message, alternatives: list[str]) -> Rule:
     """Register a rule whose identifier is derived from its unique message."""
     for existing_rule in RULES.values():
         if existing_rule[2] == message:
@@ -40,7 +40,7 @@ def add_rule(severity: Severity, message: Message) -> Rule:
     if rule_id in RULES:
         raise RuleRegistrationError("rule id already registered: %s" % rule_id)
 
-    rule = (rule_id, severity, message)
+    rule = (rule_id, severity, message, alternatives or [])
     RULES[rule_id] = rule
     return rule
 
@@ -59,16 +59,18 @@ def make_diagnostic(
         "line": line,
         "column": column,
         "message": rule[2],
+        "alternatives": rule[3]
     }
 
 
 def format_diagnostic(diagnostic: Diagnostic) -> str:
     """Format a diagnostic for command-line output."""
-    return "%s:%s:%s: %s %s %s" % (
+    return "%s:%s:%s: %s %s %s alternatives=%s" % (
         diagnostic["filename"],
         diagnostic["line"],
         diagnostic["column"],
         diagnostic["rule_id"],
         diagnostic["severity"].value,
         diagnostic["message"],
+        diagnostic["alternatives"],
     )

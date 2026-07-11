@@ -10,7 +10,7 @@ from checkers._framework import add_rule
 from checkers._framework import make_diagnostic
 
 
-RULE = add_rule(Severity.ERROR, "prohibited print usage")
+RULE = add_rule(Severity.ERROR, "print", ["prnt", "sys.stdout.write"])
 
 
 def check_source(source: str, filename: str = "<string>") -> List[Diagnostic]:

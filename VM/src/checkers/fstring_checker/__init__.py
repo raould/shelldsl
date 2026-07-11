@@ -10,7 +10,7 @@ from checkers._framework import add_rule
 from checkers._framework import make_diagnostic
 
 
-RULE = add_rule(Severity.ERROR, "f-string interpolation")
+RULE = add_rule(Severity.ERROR, "f-string", ["%-formatting"])
 
 
 def _is_f_string(value: str) -> bool:
