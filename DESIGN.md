@@ -25,6 +25,8 @@ The MVP must:
 - Expose the effective environment, working directory, and executable lookup.
 - Permit isolated command contexts without mutating process-global state.
 - Provide `source()` as an explicit environment-import operation.
+- Emit optional `prntlog(VERBOSE, ...)` diagnostics without contaminating
+    command stdout.
 - Avoid import hooks, namespace injection, shell-mode auto-detection, and
   third-party dependencies.
 
@@ -96,6 +98,13 @@ The context exposes:
 path-list operations, but the MVP avoids pretending that all environment
 variables have a universal type.
 
+Environment inspection and process execution may emit optional
+`prntlog(VERBOSE, ...)` diagnostics through the SDK logging boundary when it
+is available. These messages belong on stderr and must never be mixed into
+captured command stdout. Useful messages include the selected working
+directory, whether an executable was found, and the number of environment
+overrides. Secrets and complete environment contents must not be logged.
+
 ### 2. Explicit result model
 
 `Result` is not a string and does not implement implicit stdout coercion. It
@@ -155,10 +164,18 @@ no executable lookup and starts no process. `.run()` is the execution boundary.
 Properties that need output, such as `result.text`, belong to `Result`, not to
 `CommandSpec`, so execution remains explicit.
 
+The execution boundary may emit `prntlog(VERBOSE, ...)` messages for the
+normalized argument vector, working directory, process start, and process
+completion. Sensitive arguments must be redacted or omitted by any future
+API. Verbose diagnostics must go to stderr and must not enter command stdout.
+
 Pipelines are also lazy. A pipeline starts all stages with OS pipes, waits for
 all stages, captures the final stage's stdout, and captures stderr separately.
 The pipeline result's `code` is the final stage's code in the MVP. A future
 strict mode may expose every stage's status.
+
+Pipeline tracing may emit one `VERBOSE` message per stage and a final
+completion message. It must not alter pipe contents or execution order.
 
 ### 7. Explicit environment sourcing
 
@@ -472,7 +489,9 @@ The test suite must cover at least:
 9. Derived contexts do not mutate `os.environ` or the parent context.
 10. `source()` returns a derived context and does not mutate the caller.
 11. Command construction does not execute until `.run()`.
-12. No dynamic import or namespace command generation is required.
+12. `prntlog(VERBOSE, ...)` diagnostics are gated and written separately from
+    command stdout.
+13. No dynamic import or namespace command generation is required.
 
 The VM checker suite remains a separate preflight layer. It validates portable
 source; it does not prove that a host executable exists. Runtime process tests
@@ -483,6 +502,9 @@ are the final authority for this host-side MVP.
 - Use explicit argument vectors for ordinary commands.
 - Treat `cmd.shell(...)` and `source(...)` as trusted-input boundaries.
 - Do not interpolate untrusted values into shell command strings.
+- Route optional implementation tracing through `prntlog(VERBOSE, ...)`.
+- Never log secrets, complete environments, or unredacted sensitive arguments.
+- Keep verbose tracing on stderr and out of command stdout and pipeline pipes.
 - Decode process output using an explicit policy in the final implementation;
   the skeleton uses the host text mode as a placeholder.
 - Preserve stderr and exit status even when a command fails.
