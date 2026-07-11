@@ -213,8 +213,8 @@ The checker should report:
 Example:
 
 ```text
-VM0/src/example.py:14:5: P001 prohibited print usage
-VM0/src/example.py:22:1: P006 prohibited import: typing
+VM0/src/example.py:14:5: 6d0d587 print
+VM0/src/example.py:22:1: f427411 function or variable annotations
 ```
 
 The initial command-line interface can use `sys.argv` so the checker itself remains executable on Python 3.0. If the minimum checker runtime is later raised, `argparse` may be used.
@@ -270,10 +270,20 @@ unique. Its stable identifier is the first seven hexadecimal characters of
 the SHA-1 digest of that UTF-8 message. Registration fails on duplicate
 messages and on duplicate seven-character digests.
 
-The generated identifiers for the initial rules are:
+The generated identifiers for the currently implemented rules are:
 
-- `72009db`: prohibited print usage.
-- `f0cb473`: f-string interpolation.
+- `6d0d587`: print.
+- `003d1d9`: f-string.
+- `0a3b594`: floor division.
+- `f427411`: function or variable annotations.
+- `c4abaed`: with statement.
+- `62126fd`: yield or generator syntax.
+- `c58e886`: async or await syntax.
+- `eec2eab`: exception binding with as.
+- `0f3edd0`: raise from exception chaining.
+- `312adc7`: comprehension or generator expression.
+- `4695303`: set literal or set operation.
+- `1a4ac84`: decorator syntax.
 
 The MVP SDK provides `shelldsl_sdk.prnt()` as a deliberately small output
 shim. It accepts positional values, separates them with one space, and adds
@@ -284,17 +294,17 @@ for the `print(...)` syntax.
 
 ### Syntax rules
 
-- `72009db`: prohibited `print` statement or print-based output.
-- `P002`: prohibited floor division `//`.
-- `P003`: prohibited Python 3 function or variable annotations in shared source.
-- `P004`: prohibited `with` statement.
-- `P005`: prohibited `yield`, generator expression, or generator function.
-- `P006`: prohibited `async` or `await`.
-- `P007`: prohibited exception binding with `as`.
-- `P008`: prohibited `raise ... from ...`.
-- `P009`: prohibited comprehension.
-- `P010`: prohibited set literal or set operation when not part of the supported contract.
-- `P011`: prohibited decorator.
+- `6d0d587`: prohibited `print` statement or print-based output.
+- `0a3b594`: prohibited floor division `//`.
+- `f427411`: prohibited Python 3 function or variable annotations in shared source.
+- `c4abaed`: prohibited `with` statement.
+- `62126fd`: prohibited `yield`, generator expression, or generator function.
+- `c58e886`: prohibited `async` or `await`.
+- `eec2eab`: prohibited exception binding with `as`.
+- `0f3edd0`: prohibited `raise ... from ...`.
+- `312adc7`: prohibited comprehension.
+- `4695303`: prohibited set literal or set operation when not part of the supported contract.
+- `1a4ac84`: prohibited decorator.
 - `P012`: prohibited `class X(object)`.
 - `P013`: prohibited assignment expression or pattern matching.
 - `P014`: prohibited Python 2 long literal suffix.
