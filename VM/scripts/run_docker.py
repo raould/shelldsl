@@ -82,7 +82,10 @@ def docker_arguments(options):
     project = os.path.abspath(project)
     if not os.path.isdir(project):
         raise ValueError("project directory does not exist: %s" % project)
-    if not options.command:
+    container_command = list(options.command)
+    if container_command and container_command[0] == "--":
+        container_command = container_command[1:]
+    if not container_command:
         raise ValueError("a container command is required after --")
 
     if not options.image:
@@ -97,7 +100,7 @@ def docker_arguments(options):
         mount = mount + ":ro"
     command.extend(["--volume", mount, "--workdir", options.workdir])
     command.append(options.image)
-    command.extend(options.command)
+    command.extend(container_command)
     return command
 
 

@@ -49,6 +49,12 @@ class DockerRunnerTests(unittest.TestCase):
         ])
         self.assertNotIn("bash", command)
 
+    def test_strips_argument_separator_before_container_command(self):
+        command = run_docker.docker_arguments(
+            self.options(command=["--", "python", "script.py"])
+        )
+        self.assertEqual(command[-2:], ["python", "script.py"])
+
     def test_requires_a_container_command(self):
         with self.assertRaises(ValueError):
             run_docker.docker_arguments(self.options(command=[]))

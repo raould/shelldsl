@@ -22,12 +22,23 @@ def _emit_output(stdout, stderr):
         sys.stderr.flush()
 
 
+def _which(program, path):
+    finder = getattr(shutil, "which", None)
+    if finder is not None:
+        return finder(program, path=path)
+    for directory in (path or os.defpath).split(os.pathsep):
+        candidate = os.path.join(directory, program)
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return None
+
+
 def _resolve_executable(program, env):
     if os.path.dirname(program):
         if os.path.isfile(program) and os.access(program, os.X_OK):
             return program
         return None
-    return shutil.which(program, path=env.get("PATH"))
+    return _which(program, env.get("PATH"))
 
 
 def _resolve_bash(explicit, env):
