@@ -17,12 +17,19 @@ The MVP must:
 - Invoke any executable discoverable through the host process's `PATH`.
 - Also invoke an executable supplied as an explicit path.
 - Use argument lists and `shell=False` by default.
-- Keep command construction lazy until `.run()` or an output property is read.
+- Execute public `cmd()` and `bash()` calls immediately; use `cmd_def()` for
+    lazy command construction and pipeline composition.
 - Support explicit pipelines between command specifications.
 - Return an explicit result object containing stdout, stderr, and exit code.
-- Make output conversion deliberate through `.text`, `.lines`, `.json()`,
   `.csv()`, `.tsv()`, and `.kv()`.
 - Expose the effective environment, working directory, and executable lookup.
+
+### 6. Immediate and lazy execution
+
+Public `cmd()` and `bash()` calls execute immediately and return a `Result`.
+Use `cmd_def()` when a command must be retained, inspected, or composed into a
+pipeline; call `.run()` on that definition to execute it. The lazy Bash form is
+`cmd_def.bash()`.
 - Permit isolated command contexts without mutating process-global state.
 - Provide `source()` as an explicit environment-import operation.
 - Emit optional `prntlog(DEBUG, ...)` diagnostics without contaminating
@@ -39,18 +46,18 @@ creation belongs to the host adapter because Python 2.0 does not provide
 ## Public API
 
 ```python
-from shelldsl import CommandError, Env, cmd
+from shelldsl import CommandError, Env, cmd, cmd_def
 
-# Build, then run.
-result = cmd("git", "status", "--short").run()
+# Public commands execute immediately.
+result = cmd("git", "status", "--short")
 if result.ok:
     print(result.text)
 
 # A single command string is tokenized with shlex; it is not passed to a shell.
-result = cmd("git status --short").run()
+result = cmd("git status --short")
 
 # Explicit argument-list form is preferred when values are untrusted.
-result = cmd(["git", "show", revision]).run()
+result = cmd(["git", "show", revision])
 
 # Inspect the host environment without executing.
 print(cmd("git").which())
@@ -59,10 +66,10 @@ print(cmd.env.as_dict()["PATH"])
 
 # Bind a reusable command without import magic.
 git = cmd.bind("git")
-git("log", "--oneline", "-10").run()
+git("log", "--oneline", "-10")
 
 # Lazy pipeline construction.
-pipeline = cmd("ps", "aux") | cmd("grep", "python") | cmd("wc", "-l")
+pipeline = cmd_def("ps", "aux") | cmd_def("grep", "python") | cmd_def("wc", "-l")
 count = int(pipeline.run().text.strip())
 
 # Structured output is an explicit bridge.
@@ -309,14 +316,17 @@ and executed without a shell. Shell operators such as `&&`, redirection, and
 command substitution are not implicitly enabled.
 
 If a user explicitly needs shell syntax, the MVP provides an opt-in
-`cmd.bash(command)` constructor. It is clearly marked as Bash execution and
-is not used by ordinary `cmd()` calls. The implementation must document that
-shell input is trusted input.
+`bash(command)` execution function. It is clearly marked as Bash execution and
+is not used by ordinary `cmd()` calls. Use `cmd_def.bash(command)` when a lazy
+Bash definition is needed. The implementation must document that shell input
+is trusted input.
 
-### 6. Lazy two-phase execution
+### 6. Immediate and lazy execution
 
-`CommandSpec` and `Pipeline` are immutable descriptions. Construction performs
-no executable lookup and starts no process. `.run()` is the execution boundary.
+Public `cmd()` and `bash()` calls execute immediately and return a `Result`.
+Use `cmd_def()` when a command must be retained, inspected, or composed into a
+pipeline; call `.run()` on that definition to execute it. The lazy Bash form is
+`cmd_def.bash()`.
 Properties that need output, such as `result.text`, belong to `Result`, not to
 `CommandSpec`, so execution remains explicit.
 

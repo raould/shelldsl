@@ -1,3 +1,3 @@
 import shelldsl
 
-shelldsl.bash("echo 'hello world'").run()
+shelldsl.bash("echo 'hello world'")

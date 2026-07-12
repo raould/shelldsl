@@ -1,0 +1,3 @@
+* .run() quickly becomes noise.
+* for the shellsdk, at the moment it forwards the stdout and stderr so that e.g. `cmd("echo 'hello world'for the shellsdk, at the moment it forwards the stdout and stderr so that e.g. `cmd("echo 'hello world'")` emits 'hello world' when the program is run. however, there are times when the output from the invoked command shold instead not be emitted to the console, but saved into a python variable. `res = cmd("curl http://example.com").run()")`
+ 

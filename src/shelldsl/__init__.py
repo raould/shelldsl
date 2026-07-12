@@ -9,6 +9,7 @@ from .core import (
     bash,
     bind,
     cmd,
+    cmd_def,
 )
 from .errors import CommandError
 from .result import Result
@@ -24,4 +25,5 @@ __all__ = (
     "bash",
     "bind",
     "cmd",
+    "cmd_def",
 )

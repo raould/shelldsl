@@ -90,7 +90,7 @@ class CommandContext:
         return _resolve_executable(program, self.env)
 
     def run(self, command, *args):
-        return CommandSpec(command, *args, context=self).run()
+        return cmd_def(command, *args, context=self).run()
 
     def source(self, path, executable=None):
         shell = _resolve_bash(executable or self.bash, self.env)
@@ -231,17 +231,21 @@ class Pipeline:
                     process.wait()
 
 
+def cmd_def(command, *args, **options):
+    context = options.pop("context", None)
+    if options:
+        raise TypeError("unexpected command options")
+    return CommandSpec(command, *args, context=context)
+
+
 def cmd(*parts):
     if len(parts) == 1 and isinstance(parts[0], CommandContext):
         return parts[0]
-    return CommandSpec(parts[0], *parts[1:])
+    return cmd_def(parts[0], *parts[1:]).run()
 
 
-def bash(command, *args, **options):
-    context = options.pop("context", None) or CommandContext()
-    executable = options.pop("executable", None)
-    if options:
-        raise TypeError("unexpected Bash options")
+def _bash_def(command, args, context, executable):
+    context = context or CommandContext()
     if args:
         raise TypeError("cmd.bash() accepts one shell command string")
     shell = _resolve_bash(executable or context.bash, context.env)
@@ -253,13 +257,30 @@ def bash(command, *args, **options):
     )
 
 
+def bash(command, *args, **options):
+    context = options.pop("context", None)
+    executable = options.pop("executable", None)
+    if options:
+        raise TypeError("unexpected Bash options")
+    definition = _bash_def(command, args, context, executable)
+    return definition.run()
+
+
+def _cmd_def_bash(command, *args, **options):
+    context = options.pop("context", None)
+    executable = options.pop("executable", None)
+    if options:
+        raise TypeError("unexpected Bash options")
+    return _bash_def(command, args, context, executable)
+
+
 class BoundCommand:
     def __init__(self, program, context=None):
         self.program = program
         self.context = context
 
     def __call__(self, *args):
-        return CommandSpec(self.program, *args, context=self.context)
+        return cmd_def(self.program, *args, context=self.context).run()
 
 
 def bind(program, context=None):
@@ -277,3 +298,6 @@ def make_context(**options):
 cmd.bind = bind
 cmd.bash = bash
 cmd.context = make_context
+cmd_def.bind = bind
+cmd_def.bash = _cmd_def_bash
+cmd_def.context = make_context
