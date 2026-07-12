@@ -13,6 +13,15 @@ from .result import Result
 DEFAULT_BASH = None
 
 
+def _emit_output(stdout, stderr):
+    if stdout:
+        sys.stdout.write(stdout)
+        sys.stdout.flush()
+    if stderr:
+        sys.stderr.write(stderr)
+        sys.stderr.flush()
+
+
 def _resolve_executable(program, env):
     if os.path.dirname(program):
         if os.path.isfile(program) and os.access(program, os.X_OK):
@@ -160,6 +169,7 @@ class CommandSpec:
         except OSError:
             error = sys.exc_info()[1]
             raise CommandError("could not start command", argv, error)
+        _emit_output(stdout, stderr)
         return Result(argv, stdout, stderr, process.returncode)
 
 
@@ -201,6 +211,7 @@ class Pipeline:
                 process.wait()
             for process in processes[:-1]:
                 stderr = stderr + process.stderr.read()
+            _emit_output(stdout, stderr)
             return Result(self.stages[-1].argv, stdout, stderr, processes[-1].returncode)
         finally:
             for process in processes:
