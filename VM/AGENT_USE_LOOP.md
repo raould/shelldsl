@@ -27,6 +27,57 @@ python3 VM/scripts/checkall.py SOURCE...
 It accepts individual source paths. Enumerate files before invoking it when a
 directory is part of the target scope.
 
+The Docker runtime wrapper is:
+
+```text
+python3 VM/scripts/run_docker.py --image IMAGE [OPTIONS] -- COMMAND...
+```
+
+To build and run the same command against every Dockerfile-defined Python
+image, use:
+
+```text
+python3 VM/scripts/run_docker.py \
+    --all \
+    --read-only \
+    --network-none \
+    -- python VM/test_runner.py
+```
+
+`--all` discovers `VM/docker/Dockerfile.py*` in sorted order, builds a
+deterministically named image for each Dockerfile, and runs the command once
+in each image. Existing images are reused by default; use `--rebuild` to force
+reconstruction. Containers remain ephemeral because every run uses `--rm`,
+while images are retained as local build caches. This gives stateless runtime
+execution without paying the image-build cost on every iteration. Image
+deletion is an explicit host cleanup operation, not part of a normal test
+run.
+
+The command continues through the matrix after a build or runtime failure and
+returns a nonzero status if any image fails. A failed build is an
+orchestration `ERROR`; an unavailable Docker daemon is not a target runtime
+result.
+
+It mounts the repository project directory at `/workspace`, sets that as the
+container working directory, and runs the command supplied after `--`. The
+image supplies the target interpreter; the mounted directory supplies the
+target source and tests. For example:
+
+```text
+python3 VM/scripts/run_docker.py \
+    --image shelldsl-py27 \
+    --read-only \
+    --network-none \
+    -- python VM/test_runner.py
+```
+
+Use `--project PATH` to mount another project directory and `--workdir PATH`
+to select its container path. The wrapper passes command arguments directly
+to `docker run`; it does not construct a shell command or enable a shell in
+the container. Docker being unavailable is reported as `SKIP` by policy when
+the runtime matrix treats that image as optional, or as an orchestration
+`ERROR` when the image is required.
+
 ## Stage 0: establish a baseline
 
 1. Enumerate the target source files.
