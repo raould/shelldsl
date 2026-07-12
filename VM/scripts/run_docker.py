@@ -31,7 +31,7 @@ def build_parser():
     parser.add_argument(
         "--project",
         default=None,
-        help="Project directory to mount; defaults to the repository root",
+        help="Project directory to mount; defaults to the current directory",
     )
     parser.add_argument(
         "--workdir",
@@ -78,7 +78,7 @@ def image_name(dockerfile):
 
 
 def docker_arguments(options):
-    project = options.project or repository_root()
+    project = options.project or os.getcwd()
     project = os.path.abspath(project)
     if not os.path.isdir(project):
         raise ValueError("project directory does not exist: %s" % project)

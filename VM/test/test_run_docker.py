@@ -72,6 +72,23 @@ class DockerRunnerTests(unittest.TestCase):
         self.assertEqual(command[:2], ["docker", "build"])
         self.assertEqual(command[-1], run_docker.repository_root())
 
+    def test_project_defaults_to_current_directory(self):
+        original_getcwd = run_docker.os.getcwd
+        original_isdir = run_docker.os.path.isdir
+        run_docker.os.getcwd = lambda: "/tmp/target-project"
+        run_docker.os.path.isdir = lambda path: path == "/tmp/target-project"
+        try:
+            command = run_docker.docker_arguments(
+                self.options(project=None)
+            )
+        finally:
+            run_docker.os.getcwd = original_getcwd
+            run_docker.os.path.isdir = original_isdir
+        self.assertIn(
+            "/tmp/target-project:/workspace:ro",
+            command,
+        )
+
     def test_parser_supports_rebuild(self):
         options = run_docker.build_parser().parse_args(
             ["--all", "--rebuild", "--", "python", "--version"]
