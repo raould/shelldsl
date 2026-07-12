@@ -4,6 +4,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 
 from .errors import CommandError
 from .result import Result
@@ -28,7 +29,7 @@ def _resolve_bash(explicit, env):
     return resolved
 
 
-class Env(object):
+class Env:
     """Copy-on-derive environment mapping used by a command context."""
 
     def __init__(self, values=None):
@@ -49,7 +50,7 @@ class Env(object):
         return self._values.get(key, default)
 
 
-class CommandContext(object):
+class CommandContext:
     def __init__(self, cwd=None, env=None, bash=None):
         self.cwd = cwd or os.getcwd()
         self.env = env if isinstance(env, Env) else Env(env)
@@ -83,7 +84,8 @@ class CommandContext(object):
                 stderr=subprocess.PIPE,
             )
             stdout, stderr = process.communicate()
-        except OSError as error:
+        except OSError:
+            error = sys.exc_info()[1]
             raise CommandError("could not start Bash", [shell], error)
         if process.returncode != 0:
             raise CommandError(
@@ -98,19 +100,25 @@ class CommandContext(object):
         return self.with_(env=Env(values))
 
 
-class CommandSpec(object):
+class CommandSpec:
     def __init__(self, command, *args, **options):
         self.context = options.pop("context", None) or CommandContext()
         self.shell_executable = options.pop("shell_executable", None)
-        self.use_shell = options.pop("use_shell", False)
+        self.use_shell = options.pop("use_shell", 0)
         if options:
             raise TypeError("unexpected command options")
         if isinstance(command, (list, tuple)):
             if args:
                 raise TypeError("cannot append arguments to an argument list")
-            self.argv = tuple(str(value) for value in command)
+            values = []
+            for value in command:
+                values.append(str(value))
+            self.argv = tuple(values)
         elif args:
-            self.argv = tuple([str(command)] + [str(value) for value in args])
+            values = [str(command)]
+            for value in args:
+                values.append(str(value))
+            self.argv = tuple(values)
         else:
             self.argv = tuple(shlex.split(command))
         if not self.argv:
@@ -136,7 +144,7 @@ class CommandSpec(object):
             if executable is None:
                 raise CommandError("program not found: %s" % self.argv[0], self.argv)
             argv = list(self.argv)
-            shell_value = False
+            shell_value = 0
         try:
             process = subprocess.Popen(
                 shell_value if shell_value else argv,
@@ -146,21 +154,23 @@ class CommandSpec(object):
                 executable=executable if self.use_shell else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True,
+                universal_newlines=1,
             )
             stdout, stderr = process.communicate()
-        except OSError as error:
+        except OSError:
+            error = sys.exc_info()[1]
             raise CommandError("could not start command", argv, error)
         return Result(argv, stdout, stderr, process.returncode)
 
 
-class Pipeline(object):
+class Pipeline:
     def __init__(self, stages):
         self.stages = tuple(stages)
         if not self.stages:
             raise CommandError("empty pipeline")
-        if any(stage.use_shell for stage in self.stages):
-            raise CommandError("shell commands cannot be pipeline stages")
+        for stage in self.stages:
+            if stage.use_shell:
+                raise CommandError("shell commands cannot be pipeline stages")
 
     def __or__(self, other):
         return Pipeline(self.stages + (other,))
@@ -180,7 +190,7 @@ class Pipeline(object):
                     stdin=previous,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True,
+                    universal_newlines=1,
                 )
                 if previous is not None:
                     previous.close()
@@ -189,7 +199,8 @@ class Pipeline(object):
             stdout, stderr = processes[-1].communicate()
             for process in processes[:-1]:
                 process.wait()
-            stderr = stderr + "".join(process.stderr.read() for process in processes[:-1])
+            for process in processes[:-1]:
+                stderr = stderr + process.stderr.read()
             return Result(self.stages[-1].argv, stdout, stderr, processes[-1].returncode)
         finally:
             for process in processes:
@@ -215,17 +226,32 @@ def bash(command, *args, **options):
     return CommandSpec(
         [command],
         context=context,
-        use_shell=True,
+        use_shell=1,
         shell_executable=shell,
     )
 
 
+class BoundCommand:
+    def __init__(self, program, context=None):
+        self.program = program
+        self.context = context
+
+    def __call__(self, *args):
+        return CommandSpec(self.program, *args, context=self.context)
+
+
 def bind(program, context=None):
-    def invoke(*args):
-        return CommandSpec(program, *args, context=context)
-    return invoke
+    return BoundCommand(program, context)
+
+
+def make_context(**options):
+    return CommandContext(
+        cwd=options.get("cwd"),
+        env=options.get("env"),
+        bash=options.get("bash"),
+    )
 
 
 cmd.bind = bind
 cmd.bash = bash
-cmd.context = lambda **options: CommandContext(**options)
+cmd.context = make_context

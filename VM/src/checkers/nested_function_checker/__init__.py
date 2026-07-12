@@ -9,11 +9,17 @@ def check_source(source: str, filename: str = "<string>") -> List[Diagnostic]:
     if tree is None:
         return []
     found = []
-    def visit(node, nested):
+    def visit(node, inside_function):
         for child in ast.iter_child_nodes(node):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and nested:
+            is_function = isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef)
+            )
+            if is_function and inside_function:
                 line, column = node_position(child)
                 found.append(make_diagnostic(filename, line, column, RULE))
-            visit(child, nested or isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)))
+            if isinstance(child, ast.ClassDef):
+                visit(child, False)
+            else:
+                visit(child, inside_function or is_function)
     visit(tree, False)
     return found

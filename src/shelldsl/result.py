@@ -3,9 +3,10 @@
 import csv
 import io
 import json
+from .errors import CommandError
 
 
-class Result(object):
+class Result:
     """The completed result of one command or pipeline."""
 
     def __init__(self, argv, stdout, stderr, code):
@@ -13,22 +14,12 @@ class Result(object):
         self.stdout = stdout
         self.stderr = stderr
         self.code = code
-
-    @property
-    def ok(self):
-        return self.code == 0
-
-    @property
-    def text(self):
-        return self.stdout
-
-    @property
-    def lines(self):
-        return self.stdout.splitlines()
+        self.ok = self.code == 0
+        self.text = self.stdout
+        self.lines = self.stdout.splitlines()
 
     def raise_for_status(self):
         if not self.ok:
-            from .errors import CommandError
             raise CommandError(
                 "command failed with exit code %s" % self.code,
                 self.argv,
@@ -38,19 +29,25 @@ class Result(object):
     def json(self):
         return json.loads(self.stdout)
 
-    def csv(self, header=False):
+    def csv(self, header=0):
         rows = list(csv.reader(io.StringIO(self.stdout)))
         if not header:
             return rows
         if not rows:
             return []
-        return [dict(zip(rows[0], row)) for row in rows[1:]]
+        result = []
+        for row in rows[1:]:
+            result.append(dict(zip(rows[0], row)))
+        return result
 
     def tsv(self, columns=None):
         rows = list(csv.reader(io.StringIO(self.stdout), delimiter="\t"))
         if columns is None:
             return rows
-        return [dict(zip(columns, row)) for row in rows]
+        result = []
+        for row in rows:
+            result.append(dict(zip(columns, row)))
+        return result
 
     def kv(self, sep="="):
         values = {}

@@ -6,5 +6,7 @@ class CommandError(Exception):
 
     def __init__(self, message, argv=None, cause=None):
         Exception.__init__(self, message)
-        self.argv = tuple(argv or ())
+        if argv is None:
+            argv = ()
+        self.argv = tuple(argv)
         self.cause = cause

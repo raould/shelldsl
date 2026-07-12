@@ -13,7 +13,7 @@ from checkers._framework import make_diagnostic
 RULE = add_rule(
     Severity.ERROR,
     "print",
-    ["prnt", "shelldsl_sdk.write", "sys.stdout.write"],
+    ["prnt", "vm_sdk.write", "sys.stdout.write"],
 )
 
 

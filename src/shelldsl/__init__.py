@@ -13,7 +13,7 @@ from .core import (
 from .errors import CommandError
 from .result import Result
 
-__all__ = [
+__all__ = (
     "DEFAULT_BASH",
     "CommandContext",
     "CommandError",
@@ -24,4 +24,4 @@ __all__ = [
     "bash",
     "bind",
     "cmd",
-]
+)
