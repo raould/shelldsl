@@ -1,3 +1,3 @@
 import shelldsl
 
-shelldsl.bash("echo 'hello world'")
+shelldsl.bash_tap("echo 'hello world'")

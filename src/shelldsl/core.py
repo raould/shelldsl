@@ -152,7 +152,7 @@ class CommandSpec:
             return self.shell_executable
         return self.context.which(self.argv[0])
 
-    def run(self):
+    def _run(self, tap):
         if self.use_shell:
             executable = self.shell_executable
             if executable is None:
@@ -180,8 +180,15 @@ class CommandSpec:
         except OSError:
             error = sys.exc_info()[1]
             raise CommandError("could not start command", argv, error)
-        _emit_output(stdout, stderr)
+        if tap:
+            _emit_output(stdout, stderr)
         return Result(argv, stdout, stderr, process.returncode)
+
+    def run(self):
+        return self._run(0)
+
+    def tap(self):
+        return self._run(1)
 
 
 class Pipeline:
@@ -196,7 +203,7 @@ class Pipeline:
     def __or__(self, other):
         return Pipeline(self.stages + (other,))
 
-    def run(self):
+    def _run(self, tap):
         processes = []
         previous = None
         try:
@@ -222,13 +229,20 @@ class Pipeline:
                 process.wait()
             for process in processes[:-1]:
                 stderr = stderr + process.stderr.read()
-            _emit_output(stdout, stderr)
+            if tap:
+                _emit_output(stdout, stderr)
             return Result(self.stages[-1].argv, stdout, stderr, processes[-1].returncode)
         finally:
             for process in processes:
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+
+    def run(self):
+        return self._run(0)
+
+    def tap(self):
+        return self._run(1)
 
 
 def cmd_def(command, *args, **options):
@@ -242,6 +256,12 @@ def cmd(*parts):
     if len(parts) == 1 and isinstance(parts[0], CommandContext):
         return parts[0]
     return cmd_def(parts[0], *parts[1:]).run()
+
+
+def cmd_tap(*parts):
+    if len(parts) == 1 and isinstance(parts[0], CommandContext):
+        return parts[0]
+    return cmd_def(parts[0], *parts[1:]).tap()
 
 
 def _bash_def(command, args, context, executable):
@@ -264,6 +284,15 @@ def bash(command, *args, **options):
         raise TypeError("unexpected Bash options")
     definition = _bash_def(command, args, context, executable)
     return definition.run()
+
+
+def bash_tap(command, *args, **options):
+    context = options.pop("context", None)
+    executable = options.pop("executable", None)
+    if options:
+        raise TypeError("unexpected Bash options")
+    definition = _bash_def(command, args, context, executable)
+    return definition.tap()
 
 
 def _cmd_def_bash(command, *args, **options):

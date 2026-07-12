@@ -26,8 +26,10 @@ The MVP must:
 
 ### 6. Immediate and lazy execution
 
-Public `cmd()` and `bash()` calls execute immediately and return a `Result`.
-Use `cmd_def()` when a command must be retained, inspected, or composed into a
+Public `cmd()` and `bash()` calls execute immediately, capture stdout/stderr,
+and return a `Result` without writing to the console. Use `cmd_tap()` or
+`bash_tap()` when output should also be forwarded to the console. Use
+`cmd_def()` when a command must be retained, inspected, or composed into a
 pipeline; call `.run()` on that definition to execute it. The lazy Bash form is
 `cmd_def.bash()`.
 - Permit isolated command contexts without mutating process-global state.
@@ -46,7 +48,7 @@ creation belongs to the host adapter because Python 2.0 does not provide
 ## Public API
 
 ```python
-from shelldsl import CommandError, Env, cmd, cmd_def
+from shelldsl import CommandError, Env, bash, cmd, cmd_def
 
 # Public commands execute immediately.
 result = cmd("git", "status", "--short")
@@ -73,9 +75,9 @@ pipeline = cmd_def("ps", "aux") | cmd_def("grep", "python") | cmd_def("wc", "-l"
 count = int(pipeline.run().text.strip())
 
 # Structured output is an explicit bridge.
-users = cmd("curl", "-fsS", url).run().json()
-rows = cmd("cat", "sales.csv").run().csv(header=True)
-config = cmd("git", "config", "--list").run().kv()
+users = cmd("curl", "-fsS", url).json()
+rows = cmd("cat", "sales.csv").csv(header=True)
+config = cmd("git", "config", "--list").kv()
 
 # A context is inspectable and swappable.
 ctx = cmd.context(cwd=project_dir, env={"DEBUG": "1"})
@@ -115,7 +117,7 @@ The string form is not a shell parser. It must not implicitly interpret
 pipeline objects for pipes:
 
 ```python
-pipeline = cmd("ps", "aux") | cmd("grep", "python") | cmd("wc", "-l")
+pipeline = cmd_def("ps", "aux") | cmd_def("grep", "python") | cmd_def("wc", "-l")
 ```
 
 Use the list or positional forms when arguments come from variables or
@@ -129,13 +131,13 @@ cmd("git", "commit", "-m", commit_message)
 Actual shell syntax is an explicit, separate boundary:
 
 ```python
-cmd.bash("git status --short && echo done")
+bash("git status --short && echo done")
 ```
 
 The shell-family API is intentionally explicit and extensible:
 
 ```python
-cmd.bash("...")
+bash("...")
 
 # Future adapters, not part of the MVP:
 cmd.sh("...")

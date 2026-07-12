@@ -7,9 +7,11 @@ from .core import (
     Env,
     Pipeline,
     bash,
+    bash_tap,
     bind,
     cmd,
     cmd_def,
+    cmd_tap,
 )
 from .errors import CommandError
 from .result import Result
@@ -23,7 +25,9 @@ __all__ = (
     "Pipeline",
     "Result",
     "bash",
+    "bash_tap",
     "bind",
     "cmd",
     "cmd_def",
+    "cmd_tap",
 )
