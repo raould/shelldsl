@@ -9,6 +9,7 @@ except NameError:
 
 
 VERBOSE = 10
+DEBUG = 20
 WARN = 30
 ERROR = 40
 PRNTLOG_LEVEL = None
@@ -21,6 +22,8 @@ def _level_from_name(value):
     value = value.upper()
     if value == "VERBOSE":
         return VERBOSE
+    if value == "DEBUG":
+        return DEBUG
     if value == "WARN":
         return WARN
     if value == "ERROR":
@@ -36,7 +39,7 @@ def set_prntlog_level(level):
         return
     if isinstance(level, basestring):
         level = _level_from_name(level)
-    if level not in (VERBOSE, WARN, ERROR):
+    if level not in (VERBOSE, DEBUG, WARN, ERROR):
         raise ValueError("invalid PRNTLOG level")
     PRNTLOG_LEVEL = level
 
@@ -64,6 +67,8 @@ def prntlog(level, message):
         return
     if level == VERBOSE:
         label = "VERBOSE"
+    elif level == DEBUG:
+        label = "DEBUG"
     elif level == WARN:
         label = "WARN"
     else:

@@ -25,7 +25,7 @@ The MVP must:
 - Expose the effective environment, working directory, and executable lookup.
 - Permit isolated command contexts without mutating process-global state.
 - Provide `source()` as an explicit environment-import operation.
-- Emit optional `prntlog(VERBOSE, ...)` diagnostics without contaminating
+- Emit optional `prntlog(DEBUG, ...)` diagnostics without contaminating
     command stdout.
 - Avoid import hooks, namespace injection, shell-mode auto-detection, and
   third-party dependencies.
@@ -122,12 +122,117 @@ cmd("git", "commit", "-m", commit_message)
 Actual shell syntax is an explicit, separate boundary:
 
 ```python
-cmd.shell("git status --short && echo done")
+cmd.bash("git status --short && echo done")
 ```
 
-Only `cmd.shell()` may enable shell execution, and its input must be treated
-as trusted shell source. Ordinary `cmd()` calls must never silently fall back
-to `shell=True`.
+The shell-family API is intentionally explicit and extensible:
+
+```python
+cmd.bash("...")
+
+# Future adapters, not part of the MVP:
+cmd.sh("...")
+cmd.zsh("...")
+cmd.csh("...")
+```
+
+There is no generic `cmd.shell()` in the MVP. Adding a shell family requires
+an explicit adapter and tests for that shell's grammar and executable. Shell
+input must be treated as trusted source. Ordinary `cmd()` calls must never
+silently fall back to `shell=True`.
+
+### Shell selection and direct execution
+
+The ordinary `cmd()` and pipeline paths resolve an executable with `PATH` and
+start it directly through the host process API. This should cover the majority
+of the library:
+
+- Executable lookup.
+- Arguments.
+- Working directories.
+- Environment variables.
+- Standard-input/output/error wiring.
+- Pipelines.
+- Exit codes.
+- File redirection implemented as explicit file handles.
+
+Shell execution is required only for shell-language features, such as shell
+builtins, command substitution, shell conditionals, and sourcing a shell
+file. Shell choice is therefore a top-level host policy, not a hidden detail
+of `CommandContext.source()`.
+
+The host implementation should expose one top-level Bash setting such as:
+
+```python
+DEFAULT_BASH = None
+```
+
+For `cmd.bash()` and Bash-specific `source()` operations, selection follows
+this order:
+
+1. An explicit executable passed to `cmd.bash(..., executable=...)` or
+    `source(..., executable=...)`.
+2. The top-level `DEFAULT_BASH` setting.
+3. The `SHELLDSL_BASH` environment variable.
+4. A documented platform lookup for `bash`.
+
+The selected value must be validated as an executable before use. `bash`
+must not be assumed for ordinary commands. It is required only by the
+explicit `cmd.bash()` adapter. If Bash is unavailable, raise `CommandError`
+with the selected path and the operation; never silently substitute another
+shell.
+
+The top-level setting may be configured when constructing the default command
+factory or context, but derived contexts should inherit it explicitly rather
+than reading mutable global state during execution.
+
+#### Executable discovery by shell family
+
+Shell discovery must use executable lookup rather than hardcoded filesystem
+paths. The implementation should use the active context's `PATH` and a
+platform-specific ordered candidate list:
+
+| Adapter | Candidate order | MVP status |
+| --- | --- | --- |
+| `cmd.bash()` | Explicit executable, `DEFAULT_BASH`, `SHELLDSL_BASH`, `bash` resolved through `PATH` | MVP |
+| `cmd.cmd()` | Explicit executable, `COMSPEC`, `cmd.exe` resolved through `PATH` | Future |
+| `cmd.powershell()` | Explicit executable, `SHELLDSL_POWERSHELL`, `pwsh`, `powershell` resolved through `PATH` | Future |
+
+`COMSPEC` is the Windows convention for the command interpreter. `SHELL` is
+not a reliable Bash selector: on POSIX it may identify another user's login
+shell, and on Windows it is not the command-interpreter contract. Therefore
+`SHELL` must not override `cmd.bash()` unless a future explicit policy opts
+into that behavior.
+
+The resolver should return a discovered executable path and record the shell
+family separately. It must not infer a shell family merely from an arbitrary
+executable path. For example, an explicit path to `sh` should not silently
+become a Bash adapter. If an explicit path is supplied, validate that it is a
+file suitable for execution; if a named candidate is supplied, resolve it
+against the context `PATH`.
+
+Each future adapter must define its own argument contract. For example,
+`cmd.cmd("dir")` and `cmd.powershell("Get-ChildItem")` cannot share Bash's
+`-c` convention without verification. Shell discovery and shell invocation
+are separate responsibilities and must have separate tests.
+
+#### Diagnostic logging payloads
+
+The command runner uses the SDK's gated `prntlog()` facility for diagnostics:
+
+- `DEBUG` logs the resolved shell executable location whenever a shell is
+    used.
+- `DEBUG` logs the final fully expanded command passed to the OS or shell.
+    For direct execution this is the final argument vector; for shell
+    execution this is the final shell command string and shell argument vector.
+- `VERBOSE` logs the complete environment mapping passed to the process,
+    including inherited and overridden values.
+
+The full environment may contain credentials or tokens. `VERBOSE` environment
+logging is explicitly opt-in and must be treated as sensitive output. These
+messages must go to stderr only and must never enter command stdout or
+pipeline data. The final command log must preserve argument boundaries and
+clearly distinguish direct OS execution from shell execution.
 
 ## Design lessons implemented by the MVP
 
@@ -150,7 +255,7 @@ path-list operations, but the MVP avoids pretending that all environment
 variables have a universal type.
 
 Environment inspection and process execution may emit optional
-`prntlog(VERBOSE, ...)` diagnostics through the SDK logging boundary when it
+`prntlog(DEBUG, ...)` diagnostics through the SDK logging boundary when it
 is available. These messages belong on stderr and must never be mixed into
 captured command stdout. Useful messages include the selected working
 directory, whether an executable was found, and the number of environment
@@ -204,7 +309,7 @@ and executed without a shell. Shell operators such as `&&`, redirection, and
 command substitution are not implicitly enabled.
 
 If a user explicitly needs shell syntax, the MVP provides an opt-in
-`cmd.shell(command)` constructor. It is clearly marked as shell execution and
+`cmd.bash(command)` constructor. It is clearly marked as Bash execution and
 is not used by ordinary `cmd()` calls. The implementation must document that
 shell input is trusted input.
 
@@ -215,7 +320,7 @@ no executable lookup and starts no process. `.run()` is the execution boundary.
 Properties that need output, such as `result.text`, belong to `Result`, not to
 `CommandSpec`, so execution remains explicit.
 
-The execution boundary may emit `prntlog(VERBOSE, ...)` messages for the
+The execution boundary may emit `prntlog(DEBUG, ...)` messages for the
 normalized argument vector, working directory, process start, and process
 completion. Sensitive arguments must be redacted or omitted by any future
 API. Verbose diagnostics must go to stderr and must not enter command stdout.
@@ -225,7 +330,7 @@ all stages, captures the final stage's stdout, and captures stderr separately.
 The pipeline result's `code` is the final stage's code in the MVP. A future
 strict mode may expose every stage's status.
 
-Pipeline tracing may emit one `VERBOSE` message per stage and a final
+Pipeline tracing may emit one `DEBUG` message per stage and a final
 completion message. It must not alter pipe contents or execution order.
 
 ### 7. Explicit environment sourcing
@@ -235,8 +340,10 @@ resulting environment as a private NUL-delimited record, and returns a derived
 `CommandContext`. It does not mutate the caller's environment.
 
 The source file is executed by the host shell, so it is trusted input. The MVP
-uses `bash` when available and otherwise raises `CommandError`; shell files
-are not parsed as Python.
+uses the resolved top-level shell policy and raises `CommandError` when that
+shell is unavailable; shell files are not parsed as Python. Bash-specific
+source files must request Bash explicitly rather than relying on the default
+POSIX shell.
 
 ### 8. Stable, frozen, zero-dependency core
 
@@ -273,6 +380,19 @@ import os
 import shlex
 import shutil
 import subprocess
+
+
+DEFAULT_BASH = None
+
+
+def resolve_bash(explicit=None):
+    candidate = explicit or DEFAULT_BASH or os.environ.get("SHELLDSL_BASH")
+    if candidate is None:
+        candidate = "bash"
+    resolved = shutil.which(candidate)
+    if resolved is None:
+        raise CommandError("Bash executable not found: %s" % candidate)
+    return resolved
 
 
 class CommandError(Exception):
@@ -357,14 +477,16 @@ class Result(object):
 
 
 class CommandContext(object):
-    def __init__(self, cwd=None, env=None):
+    def __init__(self, cwd=None, env=None, bash=None):
         self.cwd = cwd or os.getcwd()
         self.env = env if isinstance(env, Env) else Env(env)
+        self.bash = bash
 
-    def with_(self, cwd=None, env=None):
+    def with_(self, cwd=None, env=None, bash=None):
         return CommandContext(
             cwd=cwd or self.cwd,
             env=env or self.env,
+            bash=bash or self.bash,
         )
 
     def cd(self, path):
@@ -376,12 +498,9 @@ class CommandContext(object):
     def run(self, command):
         return CommandSpec(command, context=self).run()
 
-    def source(self, path):
-        shell = shutil.which("bash")
-        if shell is None:
-            raise CommandError("source requires bash")
-        marker = "__SHELLDSL_ENV__"
-            script = "set -a; . \"$1\"; env -0"
+    def source(self, path, executable=None):
+        shell = resolve_bash(executable or self.bash)
+        script = "set -a; . \"$1\"; env -0"
         result = CommandSpec(
             [shell, "-c", script, shell, path], context=self
         ).run()
@@ -398,6 +517,7 @@ class CommandSpec(object):
     def __init__(self, command, *args, **kwargs):
         self.context = kwargs.pop("context", None) or CommandContext()
         self.use_shell = kwargs.pop("use_shell", False)
+        self.shell_executable = kwargs.pop("shell_executable", None)
         if kwargs:
             raise TypeError("unexpected command options")
         if isinstance(command, (list, tuple)):
@@ -421,7 +541,7 @@ class CommandSpec(object):
     def run(self):
         if self.use_shell:
             argv = self.argv[0]
-            executable = None
+            executable = self.shell_executable
         else:
             argv = list(self.argv) if len(self.argv) > 1 else shlex.split(self.argv[0])
             if not argv:
@@ -503,11 +623,14 @@ def bind(program, context=None):
     return invoke
 
 
-def shell(command, context=None):
+def bash(command, context=None, executable=None):
     return CommandSpec(
         command,
         context=context or CommandContext(),
         use_shell=True,
+        shell_executable=resolve_bash(
+            executable or (context and context.bash)
+        ),
     )
 
 
@@ -516,7 +639,7 @@ cmd.env = _default_context.env
 cmd.cwd = _default_context.cwd
 cmd.context = lambda **options: CommandContext(**options)
 cmd.bind = bind
-cmd.shell = shell
+cmd.bash = bash
 ```
 
 The skeleton is deliberately an API and behavior target, not yet a claim that
@@ -540,9 +663,12 @@ The test suite must cover at least:
 9. Derived contexts do not mutate `os.environ` or the parent context.
 10. `source()` returns a derived context and does not mutate the caller.
 11. Command construction does not execute until `.run()`.
-12. `prntlog(VERBOSE, ...)` diagnostics are gated and written separately from
+12. `prntlog(DEBUG, ...)` diagnostics are gated and written separately from
     command stdout.
-13. No dynamic import or namespace command generation is required.
+13. `cmd.bash()` resolves an explicit executable and a `PATH`-provided Bash
+    without assuming a filesystem location.
+14. Missing Bash produces a clear `CommandError`.
+15. No dynamic import or namespace command generation is required.
 
 The VM checker suite remains a separate preflight layer. It validates portable
 source; it does not prove that a host executable exists. Runtime process tests
@@ -551,9 +677,9 @@ are the final authority for this host-side MVP.
 ## Compatibility and safety policy
 
 - Use explicit argument vectors for ordinary commands.
-- Treat `cmd.shell(...)` and `source(...)` as trusted-input boundaries.
+- Treat `cmd.bash(...)` and `source(...)` as trusted-input boundaries.
 - Do not interpolate untrusted values into shell command strings.
-- Route optional implementation tracing through `prntlog(VERBOSE, ...)`.
+- Route optional implementation tracing through `prntlog(DEBUG, ...)`.
 - Never log secrets, complete environments, or unredacted sensitive arguments.
 - Keep verbose tracing on stderr and out of command stdout and pipeline pipes.
 - Decode process output using an explicit policy in the final implementation;

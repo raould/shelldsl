@@ -59,7 +59,7 @@ Python versions. Portable diagnostics therefore use the SDK's
 `shelldsl_sdk.prntlog(level, message)`, which writes to stderr using only
 `sys.stderr.write()` and `%` formatting.
 
-The SDK exposes `VERBOSE`, `WARN`, and `ERROR` levels. Output is enabled when
+The SDK exposes `VERBOSE`, `DEBUG`, `WARN`, and `ERROR` levels. Output is enabled when
 the message level is at least as important as the effective threshold. The
 effective threshold is the more verbose of these two configured thresholds:
 
@@ -68,9 +68,15 @@ effective threshold is the more verbose of these two configured thresholds:
      the `shelldsl_sdk.PRNTLOG_LEVEL` global.
 
 `VERBOSE` is the louder setting: if either source selects `VERBOSE`, verbose
-messages are enabled even when the other source is unset or selects `WARN` or
-`ERROR`. An unset or invalid environment value does not override a valid
-programmatic value. If both are unset, the default threshold is `WARN`.
+messages are enabled even when the other source is unset or selects `DEBUG`,
+`WARN`, or `ERROR`. An unset or invalid environment value does not override a
+valid programmatic value. If both are unset, the default threshold is `WARN`.
+
+For host command execution, `DEBUG` messages include the resolved shell
+executable location and the final fully expanded command passed to the OS or
+shell. `VERBOSE` messages include the complete environment mapping passed to
+the process. Environment output is sensitive and must be explicitly enabled;
+all diagnostic output goes to stderr.
 
 Example:
 
