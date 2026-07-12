@@ -18,26 +18,46 @@ to SDK shims require an intentional SDK contract decision. Checker and
 framework changes must not be made merely to suppress a target diagnostic.
 `VM0/` is out of scope unless explicitly requested.
 
+The VM tools resolve their support files from their own installation directory,
+so they can be invoked from any current working directory. Set a shell
+variable to the directory containing the `VM` folder:
+
+```sh
+SHELLSDK=/path/to/shelldsl
+```
+
 The current dispatcher is:
 
 ```text
-python3 VM/scripts/checkall.py SOURCE...
+python3 "$SHELLSDK/VM/scripts/checkall.py" SOURCE...
 ```
 
 It accepts individual source paths. Enumerate files before invoking it when a
 directory is part of the target scope.
 
+For a target project rooted at the current directory:
+
+```sh
+find ./src -name '*.py' -print | xargs python3 \
+    "$SHELLSDK/VM/scripts/checkall.py"
+```
+
 The Docker runtime wrapper is:
 
 ```text
-python3 VM/scripts/run_docker.py --image IMAGE [OPTIONS] -- COMMAND...
+python3 "$SHELLSDK/VM/scripts/run_docker.py" --image IMAGE [OPTIONS] -- COMMAND...
 ```
+
+If `--project` is omitted, the current working directory is mounted. Use
+`--project PATH` to mount a different target project. The repository's Docker
+files and build context are still resolved from the VM installation, not from
+the current directory.
 
 To build and run the same command against every Dockerfile-defined Python
 image, use:
 
 ```text
-python3 VM/scripts/run_docker.py \
+python3 "$SHELLSDK/VM/scripts/run_docker.py" \
     --all \
     --read-only \
     --network-none \
@@ -58,14 +78,15 @@ returns a nonzero status if any image fails. A failed build is an
 orchestration `ERROR`; an unavailable Docker daemon is not a target runtime
 result.
 
-It mounts the repository project directory at `/workspace`, sets that as the
+It mounts the selected target project at `/workspace`, sets that as the
 container working directory, and runs the command supplied after `--`. The
 image supplies the target interpreter; the mounted directory supplies the
-target source and tests. For example:
+target source and tests. When run from the target project directory, for
+example:
 
 ```text
-python3 VM/scripts/run_docker.py \
-    --image shelldsl-py27 \
+python3 "$SHELLSDK/VM/scripts/run_docker.py" \
+    --image shelldsl-py-2-7 \
     --read-only \
     --network-none \
     -- python VM/test_runner.py
@@ -74,9 +95,10 @@ python3 VM/scripts/run_docker.py \
 Use `--project PATH` to mount another project directory and `--workdir PATH`
 to select its container path. The wrapper passes command arguments directly
 to `docker run`; it does not construct a shell command or enable a shell in
-the container. Docker being unavailable is reported as `SKIP` by policy when
-the runtime matrix treats that image as optional, or as an orchestration
-`ERROR` when the image is required.
+the container. Add `--rebuild` to force rebuilding matrix images; otherwise
+existing images are reused. Docker being unavailable is reported as `SKIP`
+by policy when the runtime matrix treats that image as optional, or as an
+orchestration `ERROR` when the image is required.
 
 ## Stage 0: establish a baseline
 

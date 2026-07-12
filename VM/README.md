@@ -29,8 +29,6 @@ its tests, for example:
     test/
 ```
 
-`VM0/` is not inspected by these commands.
-
 ## 1. Run `checkall.py` against a target project
 
 `checkall.py` runs every discovered checker against individual source files.
@@ -41,8 +39,8 @@ From any directory on a POSIX host:
 
 ```sh
 python3 "$SHELLSDK/VM/scripts/checkall.py" \
-    /path/to/target-project/src/module_a.py \
-    /path/to/target-project/src/module_b.py
+    /path/to/target-project/src/file_a.py \
+    /path/to/target-project/src/file_b.py
 ```
 
 To check every Python file below a target source directory:
