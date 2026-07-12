@@ -1,1 +1,0 @@
-"""Automatically discoverable source checkers."""
